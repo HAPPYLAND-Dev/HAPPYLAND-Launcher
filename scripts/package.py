@@ -57,14 +57,20 @@ def add_notices(destination, launcher):
     shutil.copy2(ROOT / "README.md", destination / "README.md")
 
 
+def is_macho(file):
+    if not file.is_file() or file.is_symlink():
+        return False
+    with file.open("rb") as stream:
+        return stream.read(4) in {
+            b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xce",
+            b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca",
+        }
+
+
 def sign_macos(directory, executable, entitlements):
-    mach_o = {b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xce", b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca"}
-    for file in sorted(directory.rglob("*")):
-        if not file.is_file():
+    for file in sorted(directory.rglob("*"), key=lambda item: (item == executable, str(item))):
+        if not is_macho(file):
             continue
-        with file.open("rb") as stream:
-            if stream.read(4) not in mach_o:
-                continue
         command = ["codesign", "--force", "--sign", "-"]
         if file == executable:
             command += ["--entitlements", str(entitlements)]
@@ -79,6 +85,22 @@ def mac_bundle(published, workspace, version, entitlements):
     shutil.move(str(published), contents / "MacOS")
     resources = contents / "Resources"
     resources.mkdir()
+    frameworks = contents / "Frameworks"
+    frameworks.mkdir()
+    managed = resources / "app"
+    managed.mkdir()
+    # Keep code and resources in their bundle locations while preserving .NET lookup paths.
+    for file in list((contents / "MacOS").iterdir()):
+        if file.name == "HAPPYLAND.Launcher":
+            continue
+        if is_macho(file):
+            if file.suffix != ".dylib":
+                continue
+            target = frameworks / file.name
+        else:
+            target = managed / file.name
+        shutil.move(str(file), target)
+        file.symlink_to(os.path.relpath(target, file.parent), target_is_directory=target.is_dir())
     png = (ROOT / "src/HAPPYLAND.Launcher/Assets/server-icon.png").read_bytes()
     # Preserve the original 64-pixel icon in standard and Retina ICNS entries.
     entries = b"".join(kind + struct.pack(">I", len(png) + 8) + png for kind in (b"icp6", b"ic11"))
@@ -96,7 +118,7 @@ def mac_bundle(published, workspace, version, entitlements):
             "NSHighResolutionCapable": True,
         }, output)
     add_notices(resources, launcher=True)
-    sign_macos(contents / "MacOS", contents / "MacOS/HAPPYLAND.Launcher", entitlements)
+    sign_macos(contents, contents / "MacOS/HAPPYLAND.Launcher", entitlements)
     subprocess.run(["codesign", "--force", "--sign", "-", "--entitlements", str(entitlements), str(bundle)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
     return bundle
