@@ -1,0 +1,269 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:appearance="using:Happyland.Launcher.Appearance">
+  <Styles.Resources>
+    <ControlTheme x:Key="LauncherButton" TargetType="Button">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Border Name="PixelButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+            <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Foreground="{TemplateBinding Foreground}" RecognizesAccessKey="True" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"/>
+          </Border>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="PixelSliderTrackButton" TargetType="RepeatButton">
+      <Setter Property="Focusable" Value="False"/><Setter Property="BorderThickness" Value="0"/><Setter Property="Padding" Value="0"/>
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid Background="Transparent"><Border Height="2" Background="{TemplateBinding Background}" VerticalAlignment="Center"/></Grid>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="PixelSliderThumb" TargetType="Thumb">
+      <Setter Property="Width" Value="8"/><Setter Property="Height" Value="14"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+      <Setter Property="Background" Value="{DynamicResource PixelAccent}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelAccentShadow}"/><Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.12"/><BrushTransition Property="BorderBrush" Duration="0:0:0.12"/></Transitions></Setter>
+      <Setter Property="Template"><ControlTemplate><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"/></ControlTemplate></Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="LauncherSlider" TargetType="Slider">
+      <Setter Property="Template">
+        <ControlTemplate>
+          <Grid Background="Transparent">
+            <Track Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value, Mode=TwoWay}" IsDirectionReversed="{TemplateBinding IsDirectionReversed}" Orientation="Horizontal">
+              <Track.DecreaseButton><RepeatButton Name="PART_DecreaseButton" Theme="{StaticResource PixelSliderTrackButton}" Background="{TemplateBinding Foreground}"/></Track.DecreaseButton>
+              <Track.IncreaseButton><RepeatButton Name="PART_IncreaseButton" Theme="{StaticResource PixelSliderTrackButton}" Background="{TemplateBinding Background}"/></Track.IncreaseButton>
+              <Thumb Name="PixelSliderHandle" Theme="{StaticResource PixelSliderThumb}"/>
+            </Track>
+          </Grid>
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="PixelScrollThumb" TargetType="Thumb">
+      <Setter Property="Background" Value="{DynamicResource PixelBorder}"/>
+      <Setter Property="MinWidth" Value="4"/><Setter Property="MinHeight" Value="4"/>
+      <Setter Property="Template"><ControlTemplate><Border Background="{TemplateBinding Background}"/></ControlTemplate></Setter>
+      <Style Selector="^:pointerover"><Setter Property="Background" Value="{DynamicResource PixelBorderHover}"/></Style>
+      <Style Selector="^:pressed"><Setter Property="Background" Value="{DynamicResource PixelMuted}"/></Style>
+    </ControlTheme>
+    <ControlTheme x:Key="PixelScrollPage" TargetType="RepeatButton">
+      <Setter Property="Template"><ControlTemplate><Border Background="Transparent"/></ControlTemplate></Setter>
+    </ControlTheme>
+    <ControlTheme x:Key="LauncherScrollBar" TargetType="ScrollBar">
+      <Setter Property="MinWidth" Value="4"/><Setter Property="MinHeight" Value="4"/>
+      <Setter Property="Background" Value="{DynamicResource PixelHeader}"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="{TemplateBinding Background}">
+          <Track Name="PART_Track" Minimum="{TemplateBinding Minimum}" Maximum="{TemplateBinding Maximum}" Value="{TemplateBinding Value, Mode=TwoWay}" ViewportSize="{TemplateBinding ViewportSize}" Orientation="{TemplateBinding Orientation}" DeferThumbDrag="{TemplateBinding ScrollViewer.IsDeferredScrollingEnabled}">
+            <Track.DecreaseButton><RepeatButton Name="PART_PageUpButton" Theme="{StaticResource PixelScrollPage}" Focusable="False" MinHeight="0" MinWidth="0" Padding="0" BorderThickness="0"/></Track.DecreaseButton>
+            <Track.IncreaseButton><RepeatButton Name="PART_PageDownButton" Theme="{StaticResource PixelScrollPage}" Focusable="False" MinHeight="0" MinWidth="0" Padding="0" BorderThickness="0"/></Track.IncreaseButton>
+            <Thumb Theme="{StaticResource PixelScrollThumb}"/>
+          </Track>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+
+      <Style Selector="^:vertical"><Setter Property="Width" Value="4"/></Style>
+      <Style Selector="^:vertical /template/ Track#PART_Track"><Setter Property="IsDirectionReversed" Value="True"/></Style>
+      <Style Selector="^:horizontal"><Setter Property="Height" Value="4"/></Style>
+    </ControlTheme>
+  </Styles.Resources>
+  <Style Selector="Control"><Setter Property="FocusAdorner" Value="{x:Null}"/></Style>
+  <Style Selector="Window">
+    <Setter Property="Background" Value="{DynamicResource PixelBackground}"/>
+    <Setter Property="Foreground" Value="{DynamicResource PixelText}"/>
+    <Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/>
+    <Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/>
+    <Setter Property="UseLayoutRounding" Value="True"/>
+  </Style>
+  <Style Selector="TextBlock"><Setter Property="LineHeight" Value="18"/></Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/>
+    <Setter Property="FontSize" Value="{DynamicResource LauncherTitleSize}"/>
+    <Setter Property="LineHeight" Value="26"/>
+  </Style>
+  <Style Selector="TextBlock.small">
+    <Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/>
+    <Setter Property="FontSize" Value="{DynamicResource LauncherSmallSize}"/>
+    <Setter Property="LineHeight" Value="14"/>
+  </Style>
+  <Style Selector="TextBlock.section-title">
+    <Setter Property="FontSize" Value="{DynamicResource LauncherSectionSize}"/>
+    <Setter Property="LineHeight" Value="24"/>
+  </Style>
+  <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource PixelMuted}"/></Style>
+  <Style Selector="TextBlock.error"><Setter Property="Foreground" Value="{DynamicResource PixelError}"/></Style>
+  <Style Selector="TextBlock.success"><Setter Property="Foreground" Value="{DynamicResource PixelSuccess}"/></Style>
+  <Style Selector="Button">
+    <Setter Property="Theme" Value="{StaticResource LauncherButton}"/>
+    <Setter Property="Background" Value="{DynamicResource PixelPanel}"/>
+    <Setter Property="Foreground" Value="{DynamicResource PixelText}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PixelBorder}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="0"/>
+    <Setter Property="Padding" Value="8,4"/>
+    <Setter Property="MinHeight" Value="30"/>
+    <Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Button:pointerover"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="Button:pressed"><Setter Property="Background" Value="{DynamicResource PixelPanelPressed}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="Button:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.5"/></Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{DynamicResource PixelAccent}"/>
+    <Setter Property="Foreground" Value="{DynamicResource PixelAccentText}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PixelAccentShadow}"/>
+    <Setter Property="BorderThickness" Value="1,1,1,2"/>
+    <Setter Property="MinHeight" Value="28"/>
+    <Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/>
+    <Setter Property="FontSize" Value="12"/>
+  </Style>
+  <Style Selector="Button.primary:pointerover"><Setter Property="Background" Value="{DynamicResource PixelAccentHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelAccentShadow}"/></Style>
+  <Style Selector="Button.primary:pressed"><Setter Property="Background" Value="{DynamicResource PixelAccentPressed}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelAccentShadow}"/></Style>
+  <Style Selector="Button.nav">
+    <Setter Property="Background" Value="{DynamicResource PixelHeaderClear}"/><Setter Property="BorderThickness" Value="0,0,0,1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PixelBorderClear}"/><Setter Property="Foreground" Value="{DynamicResource PixelMuted}"/>
+    <Setter Property="Padding" Value="4,4"/>
+  </Style>
+  <Style Selector="Button.nav.selected">
+    <Setter Property="Foreground" Value="{DynamicResource PixelText}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelAccent}"/>
+  </Style>
+  <Style Selector="Button.nav:pointerover"><Setter Property="Background" Value="{DynamicResource PixelHeaderHover}"/><Setter Property="Foreground" Value="{DynamicResource PixelText}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderClear}"/></Style>
+  <Style Selector="Button.nav:pressed"><Setter Property="Background" Value="{DynamicResource PixelHeaderPressed}"/></Style>
+  <Style Selector="Button.nav.selected:pointerover"><Setter Property="BorderBrush" Value="{DynamicResource PixelAccent}"/></Style>
+  <Style Selector="Button.nav:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="TextBox">
+    <Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="Foreground" Value="{DynamicResource PixelText}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PixelBorder}"/><Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="0"/><Setter Property="Padding" Value="6,4"/><Setter Property="MinHeight" Value="30"/>
+    <Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/><Setter Property="CaretBrush" Value="{DynamicResource PixelText}"/>
+    <Setter Property="SelectionBrush" Value="{DynamicResource PixelAccent}"/>
+    <Setter Property="SelectionForegroundBrush" Value="{DynamicResource PixelAccentText}"/>
+    <Setter Property="LineHeight" Value="18"/>
+  </Style>
+  <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="TextBox:focus /template/ Border#PART_BorderElement"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/><Setter Property="BorderThickness" Value="1"/></Style>
+  <Style Selector="TextBox:disabled"><Setter Property="Opacity" Value="0.5"/></Style>
+  <Style Selector="ComboBox">
+    <Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="Foreground" Value="{DynamicResource PixelText}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource PixelBorder}"/><Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="0"/><Setter Property="Padding" Value="6,4"/><Setter Property="MinHeight" Value="30"/>
+    <Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="PlaceholderForeground" Value="{DynamicResource PixelMuted}"/>
+    <Setter Property="MaxDropDownHeight" Value="160"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <DataValidationErrors>
+          <Grid ColumnDefinitions="*,16">
+            <Border Name="ComboFrame" Grid.ColumnSpan="2" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"/>
+            <TextBlock Margin="{TemplateBinding Padding}" Text="{TemplateBinding PlaceholderText}" Foreground="{TemplateBinding PlaceholderForeground}" VerticalAlignment="Center" IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}"/>
+            <ContentControl Name="PixelSelection" Margin="{TemplateBinding Padding}" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" IsHitTestVisible="False"/>
+            <Canvas Grid.Column="1" Width="7" Height="4" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+              <Border Canvas.Left="0" Canvas.Top="0" Width="1" Height="1" Background="{DynamicResource PixelMuted}"/>
+              <Border Canvas.Left="6" Canvas.Top="0" Width="1" Height="1" Background="{DynamicResource PixelMuted}"/>
+              <Border Canvas.Left="1" Canvas.Top="1" Width="1" Height="1" Background="{DynamicResource PixelMuted}"/>
+              <Border Canvas.Left="5" Canvas.Top="1" Width="1" Height="1" Background="{DynamicResource PixelMuted}"/>
+              <Border Canvas.Left="2" Canvas.Top="2" Width="1" Height="1" Background="{DynamicResource PixelMuted}"/>
+              <Border Canvas.Left="4" Canvas.Top="2" Width="1" Height="1" Background="{DynamicResource PixelMuted}"/>
+              <Border Canvas.Left="3" Canvas.Top="3" Width="1" Height="1" Background="{DynamicResource PixelMuted}"/>
+            </Canvas>
+            <Popup Name="PART_Popup" IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}" MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}" PlacementTarget="ComboFrame" Placement="Bottom" IsLightDismissEnabled="True" InheritsTransform="True" WindowManagerAddShadowHint="False">
+              <Border Background="{DynamicResource PixelPanel}" BorderBrush="{DynamicResource PixelBorder}" BorderThickness="1" Padding="2">
+                <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                  <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}"/>
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+        </DataValidationErrors>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="ComboBox:pointerover"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="ComboBox:pressed"><Setter Property="Background" Value="{DynamicResource PixelPanelPressed}"/></Style>
+  <Style Selector="ComboBox:dropdownopen"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="ComboBox:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="ComboBox:disabled"><Setter Property="Opacity" Value="0.5"/></Style>
+  <Style Selector="Slider">
+    <Setter Property="Theme" Value="{StaticResource LauncherSlider}"/>
+    <Setter Property="Background" Value="{DynamicResource PixelBorder}"/><Setter Property="Foreground" Value="{DynamicResource PixelAccent}"/>
+    <Setter Property="MinHeight" Value="30"/>
+  </Style>
+  <Style Selector="Slider:pointerover /template/ Thumb#PixelSliderHandle"><Setter Property="Background" Value="{DynamicResource PixelAccentHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="Slider:pressed /template/ Thumb#PixelSliderHandle"><Setter Property="Background" Value="{DynamicResource PixelAccentPressed}"/></Style>
+  <Style Selector="Slider:focus-visible /template/ Thumb#PixelSliderHandle"><Setter Property="BorderBrush" Value="{DynamicResource PixelText}"/></Style>
+  <Style Selector="Slider:pointerover /template/ RepeatButton#PART_DecreaseButton"><Setter Property="Background" Value="{DynamicResource PixelAccentHover}"/></Style>
+  <Style Selector="Slider:pressed /template/ RepeatButton#PART_DecreaseButton"><Setter Property="Background" Value="{DynamicResource PixelAccentPressed}"/></Style>
+  <Style Selector="Slider:disabled"><Setter Property="Opacity" Value="0.5"/></Style>
+  <Style Selector="ComboBoxItem">
+    <Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/>
+    <Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/><Setter Property="Foreground" Value="{DynamicResource PixelText}"/>
+    <Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="Padding" Value="6,4"/>
+    <Setter Property="MinHeight" Value="28"/><Setter Property="CornerRadius" Value="0"/>
+  </Style>
+  <Style Selector="ComboBoxItem:selected"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/></Style>
+  <Style Selector="ComboBoxItem:pointerover"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/></Style>
+  <Style Selector="ComboBoxItem:pressed"><Setter Property="Background" Value="{DynamicResource PixelPanelPressed}"/></Style>
+  <Style Selector="Popup"><Setter Property="InheritsTransform" Value="True"/><Setter Property="appearance:PopupScrollBoundary.IsEnabled" Value="True"/></Style>
+  <Style Selector="FlyoutPresenter">
+    <Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorder}"/>
+    <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="0"/><Setter Property="Padding" Value="4"/>
+    <Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/><Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/>
+  </Style>
+  <Style Selector="MenuFlyoutPresenter">
+    <Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorder}"/>
+    <Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="0"/><Setter Property="Padding" Value="2"/>
+    <Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/><Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/>
+  </Style>
+  <Style Selector="MenuItem"><Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/><Setter Property="Foreground" Value="{DynamicResource PixelText}"/><Setter Property="Padding" Value="6,4"/><Setter Property="MinHeight" Value="28"/><Setter Property="CornerRadius" Value="0"/><Setter Property="BorderThickness" Value="1"/><Setter Property="BorderBrush" Value="Transparent"/></Style>
+  <Style Selector="MenuItem:selected /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="MenuItem:pressed /template/ Border#PART_LayoutRoot"><Setter Property="Background" Value="{DynamicResource PixelPanelPressed}"/></Style>
+  <Style Selector="CheckBox">
+    <Setter Property="HorizontalAlignment" Value="Stretch"/>
+    <Setter Property="Foreground" Value="{DynamicResource PixelText}"/><Setter Property="MinHeight" Value="28"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Grid ColumnDefinitions="*,Auto" Background="Transparent">
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+          <Border Name="track" Grid.Column="1" Width="22" Height="11" BorderBrush="{DynamicResource PixelBorder}" BorderThickness="1" Background="{DynamicResource PixelPanel}" VerticalAlignment="Center">
+            <Border Name="thumb" Width="6" Height="7" Background="{DynamicResource PixelMuted}" HorizontalAlignment="Left" Margin="1" RenderTransform="translate(0px,0px)">
+              <Border.Transitions><Transitions><TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.12"/><BrushTransition Property="Background" Duration="0:0:0.12"/></Transitions></Border.Transitions>
+            </Border>
+          </Border>
+        </Grid>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="CheckBox:checked /template/ Border#track"><Setter Property="Background" Value="{DynamicResource PixelAccent}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelAccentShadow}"/></Style>
+  <Style Selector="CheckBox:checked /template/ Border#thumb"><Setter Property="RenderTransform" Value="translate(12px,0px)"/><Setter Property="Background" Value="{DynamicResource PixelAccentText}"/></Style>
+  <Style Selector="CheckBox:focus-visible /template/ Border#track"><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="CheckBox:pointerover /template/ Border#track"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="CheckBox:pressed /template/ Border#track"><Setter Property="Background" Value="{DynamicResource PixelPanelPressed}"/></Style>
+  <Style Selector="CheckBox:checked:pointerover /template/ Border#track"><Setter Property="Background" Value="{DynamicResource PixelAccentHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelAccentShadow}"/></Style>
+  <Style Selector="CheckBox:checked:pressed /template/ Border#track"><Setter Property="Background" Value="{DynamicResource PixelAccentPressed}"/></Style>
+  <Style Selector="CheckBox:disabled"><Setter Property="Opacity" Value="0.5"/></Style>
+  <Style Selector="ProgressBar"><Setter Property="Foreground" Value="{DynamicResource PixelAccent}"/><Setter Property="Background" Value="{DynamicResource PixelHeader}"/><Setter Property="MinHeight" Value="2"/><Setter Property="Height" Value="2"/></Style>
+  <Style Selector="ScrollViewer"><Setter Property="AllowAutoHide" Value="False"/></Style>
+  <Style Selector="ScrollBar"><Setter Property="Theme" Value="{StaticResource LauncherScrollBar}"/></Style>
+  <Style Selector="ToolTip"><Setter Property="FontFamily" Value="avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"/><Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/><Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="Foreground" Value="{DynamicResource PixelText}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="0"/></Style>
+
+  <Style Selector="TextBlock.brand"><Setter Property="FontSize" Value="12"/></Style>
+  <Style Selector="TextBlock.hero"><Setter Property="FontSize" Value="22"/><Setter Property="LineHeight" Value="30"/><Setter Property="TextWrapping" Value="Wrap"/></Style>
+  <Style Selector="TextBlock.stat"><Setter Property="FontSize" Value="18"/><Setter Property="LineHeight" Value="24"/></Style>
+  <Style Selector="Button.quiet"><Setter Property="Background" Value="{DynamicResource PixelPanelClear}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderClear}"/><Setter Property="Padding" Value="5,3"/><Setter Property="MinHeight" Value="24"/></Style>
+  <Style Selector="Button.quiet:pointerover"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderClear}"/></Style>
+  <Style Selector="Button.quiet:pressed"><Setter Property="Background" Value="{DynamicResource PixelPanelPressed}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderClear}"/></Style>
+  <Style Selector="Button.quiet:focus-visible"><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderHover}"/></Style>
+  <Style Selector="Button.sidebar"><Setter Property="Background" Value="{DynamicResource PixelPanelClear}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorderClear}"/><Setter Property="BorderThickness" Value="2,0,0,0"/><Setter Property="Padding" Value="4,7"/></Style>
+  <Style Selector="Button.sidebar.selected"><Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelAccent}"/><Setter Property="Foreground" Value="{DynamicResource PixelAccent}"/></Style>
+  <Style Selector="Button.sidebar:pointerover"><Setter Property="Background" Value="{DynamicResource PixelPanelHover}"/></Style>
+  <Style Selector="Button.sidebar:pressed"><Setter Property="Background" Value="{DynamicResource PixelPanelPressed}"/></Style>
+  <Style Selector="Button.sidebar.selected:pointerover, Button.sidebar.selected:pressed"><Setter Property="BorderBrush" Value="{DynamicResource PixelAccent}"/></Style>
+  <Style Selector="NumericUpDown"><Setter Property="Background" Value="{DynamicResource PixelPanel}"/><Setter Property="Foreground" Value="{DynamicResource PixelText}"/><Setter Property="BorderBrush" Value="{DynamicResource PixelBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="0"/><Setter Property="MinHeight" Value="30"/><Setter Property="FontSize" Value="{DynamicResource LauncherFontSize}"/></Style>
+  <Style Selector="Button"><Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.12"/><BrushTransition Property="BorderBrush" Duration="0:0:0.12"/></Transitions></Setter></Style>
+  <Style Selector="ComboBox"><Setter Property="Transitions"><Transitions><BrushTransition Property="Background" Duration="0:0:0.12"/><BrushTransition Property="BorderBrush" Duration="0:0:0.12"/></Transitions></Setter></Style>
+
+</Styles>

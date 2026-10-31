@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>TechTeaStudio.HyperionMinecraftLauncher.Core</RootNamespace>
+    <AssemblyName>TechTeaStudio.HyperionMinecraftLauncher.Core</AssemblyName>
+    <!-- &lt;Version&gt; is inherited from Directory.Build.props which reads /VERSION. -->
+    <Description>Core library for a CmlLib-backed Minecraft launcher: launcher service contract, exception model, DTOs, file logger.</Description>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CmlLib.Core" Version="4.0.6" />
+    <PackageReference Include="DnsClient" Version="1.8.0" />
+    <!--
+      Mod-loader installers (T21a, v0.30.0). Forge + NeoForge ship as .NET
+      packages on top of CmlLib.Core 4.x. Fabric and Quilt have no NuGet
+      installer of their own - the installer we ship calls their official
+      meta APIs (meta.fabricmc.net / meta.quiltmc.org) directly, which is
+      what every third-party launcher (Prism, MultiMC, ATLauncher) does.
+    -->
+    <PackageReference Include="CmlLib.Core.Installer.Forge" Version="1.1.1" />
+    <PackageReference Include="CmlLib.Core.Installer.NeoForge" Version="4.0.1" />
+    <PackageReference Include="fNbt" Version="1.0.0" />
+    <!--
+      HtmlAgilityPack drives the NameMC skin browser (T-namemc, v0.32.1).
+      NameMC publishes no official JSON API; the browser parses public HTML pages.
+      Treat any structural change on namemc.com as the trigger to update selectors.
+    -->
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.61" />
+    <!--
+      Logging stack for SerilogLauncherLogger. The house Serilog.TechTeaStudio.Wrap
+      package exists on nuget.org but its public LoggerOptions does not expose the
+      per-file size cap (FileSizeLimitBytes) we need for the 32 MB roll. We use the
+      underlying Serilog primitives directly so the size cap can be honored.
+    -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+  </ItemGroup>
+
+</Project>
