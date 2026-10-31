@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HAPPYLAND.Contracts\HAPPYLAND.Contracts.csproj" />
+    <Content Update="appsettings.*.json" CopyToPublishDirectory="Never" />
   </ItemGroup>
 
   <PropertyGroup>

@@ -45,7 +45,7 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 
 `Announcements` 保存更新公告及历史记录。每项包含唯一的 `Id`、非空的 `Title` 和 `Content`，以及使用 ISO 8601 格式并带时区的 `PublishedAt`。空数组表示暂无公告。接口按发布时间倒序返回完整正文，相同时间按 `Id` 排序。
 
-运行：`dotnet run --project src/HAPPYLAND.Server --no-launch-profile -- --environment Production --urls http://127.0.0.1:5197`。此命令读取私有的 `appsettings.Production.json`。`GET /api/launcher` 返回整合包、账号、服务器、首页文本和快捷链接配置；`GET /api/pack` 提供支持范围请求的整合包下载；`GET /api/announcements` 返回全部更新公告，该接口在整合包尚未配置或文件不存在时也可使用。对外提供服务时配置 HTTPS，或通过 HTTPS 反向代理转发。运行已发布的后端需要 ASP.NET Core 10 运行时。
+运行：`dotnet run --project src/HAPPYLAND.Server --no-launch-profile -- --environment Production --urls http://127.0.0.1:5197`。此命令读取私有的 `appsettings.Production.json`。`GET /api/launcher` 返回整合包、账号、服务器、首页文本和快捷链接配置；`GET /api/pack` 提供支持范围请求的整合包下载；`GET /api/announcements` 返回全部更新公告，该接口在整合包尚未配置或文件不存在时也可使用。对外提供服务时配置 HTTPS，或通过 HTTPS 反向代理转发。GitHub Release 的后端包已附带运行时；自行使用框架依赖模式发布时需要 ASP.NET Core 10 运行时。
 
 ## 启动器
 
@@ -58,6 +58,23 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 游戏启动前检查整合包版本和校验值；版本不一致时先更新。整合包使用的 Mod 可在界面中启用或关闭；更新时按路径或 Mod 标识保留关闭状态。安装过程发生异常或意外中断后恢复已修改的受管文件。Minecraft 下载优先使用 BMCLAPI，遇到请求失败时使用官方地址。
 
 微软账号使用设备代码登录。皮肤站账号使用后端允许的 Yggdrasil 服务。登录令牌保存在 Windows 凭据管理器、macOS 钥匙串或 Linux Secret Service 中，密码不保存，账号 JSON 仅保存显示信息。启动前验证令牌，必要时自动刷新；令牌无法恢复时才重新登录。Linux 需要安装 libsecret 并启用桌面密钥环服务。
+
+## 自动构建与发布
+
+推送 `main`、向 `main` 提交 Pull Request，或在 [Actions](https://github.com/HAPPYLAND-Dev/HAPPYLAND-Launcher/actions/workflows/build-release.yml) 手动运行工作流，会构建 Windows x64、Linux x64、macOS Intel 和 macOS Apple Silicon。每个平台分别打包启动器和后端，压缩包及 SHA-256 校验文件可从该次运行的 Artifacts 下载，保留 7 天。
+
+推送 `v1.2.3` 这样的版本 tag 后，全部平台构建成功才会创建并公开 GitHub Release，附带八个压缩包、`SHA256SUMS.txt` 和自动生成的发布说明。`v1.2.3-rc.1` 这样的 tag 会发布为预发布版本。tag 中的版本号写入程序；普通 CI 构建使用 `0.0.0-ci.<运行序号>`。上传失败时 Release 保持草稿，重新运行工作流可继续上传。
+
+```sh
+git tag v1.2.3
+git push origin v1.2.3
+```
+
+Windows 使用 ZIP，Linux 和 macOS 使用保留可执行权限的 `tar.gz`。macOS 启动器为 `.app`，采用本地临时签名，尚未使用 Apple 开发者证书签名或公证；Windows 包尚未进行 Authenticode 签名。解压后运行启动器即可，包内已附带 .NET 运行时。Linux 桌面仍需要系统图形库和上述 libsecret 服务。
+
+后端包仅包含公开的 `appsettings.json`。部署时在解压目录复制为 `appsettings.Production.json`，填写整合包、账号及服务器配置，然后从该目录运行 `HAPPYLAND.Server`（Windows 为 `HAPPYLAND.Server.exe`）。环境配置文件不会进入发布包。
+
+本地打包需要 .NET 10 SDK 和 Python 3.11 以上版本，例如 `python scripts/package.py --runtime linux-x64 --version 1.2.3`，输出在 `artifacts/`。macOS `.app` 的打包与签名在 macOS 上执行。
 
 ## 许可证
 
