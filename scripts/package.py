@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path
 import plistlib
@@ -49,12 +50,25 @@ def publish(project, runtime, version, destination):
 
 def add_notices(destination, launcher):
     notices = destination / "Licenses"
-    notices.mkdir(parents=True)
+    notices.mkdir(parents=True, exist_ok=True)
     shutil.copy2(ROOT / "LICENSE", notices / "HAPPYLAND-MIT.txt")
     if launcher:
         shutil.copy2(ROOT / "src/Hyperion/LICENSE.txt", notices / "Hyperion-MIT.txt")
         shutil.copy2(ROOT / "src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt", notices / "Fusion-Pixel-OFL.txt")
     shutil.copy2(ROOT / "README.md", destination / "README.md")
+
+
+def add_runtime_notices(published, project, runtime):
+    packages = Path(os.environ.get("NUGET_PACKAGES", Path.home() / ".nuget/packages"))
+    config = json.loads((published / (project + ".runtimeconfig.json")).read_text(encoding="utf-8"))
+    notices = published / "Licenses"
+    notices.mkdir()
+    for framework in config["runtimeOptions"]["includedFrameworks"]:
+        name = framework["name"]
+        package = packages / (name.lower() + ".runtime." + runtime) / framework["version"].lower()
+        for file in package.iterdir():
+            if file.name.lower() in {"license.txt", "third-party-notices.txt"}:
+                shutil.copy2(file, notices / (name + "-" + file.name))
 
 
 def is_macho(file):
@@ -93,7 +107,9 @@ def mac_bundle(published, workspace, version, entitlements):
     for file in list((contents / "MacOS").iterdir()):
         if file.name == "HAPPYLAND.Launcher":
             continue
-        if is_macho(file):
+        if file.name == "Licenses":
+            target = resources / file.name
+        elif is_macho(file):
             if file.suffix != ".dylib":
                 continue
             target = frameworks / file.name
@@ -157,6 +173,7 @@ def main():
             name = f"HAPPYLAND-{kind}-{version}-{args.runtime}"
             published = workspace / name
             publish(project, args.runtime, version, published)
+            add_runtime_notices(published, project, args.runtime)
             if kind == "Launcher" and args.runtime.startswith("osx-"):
                 published = mac_bundle(published, workspace, version, entitlements)
             else:
