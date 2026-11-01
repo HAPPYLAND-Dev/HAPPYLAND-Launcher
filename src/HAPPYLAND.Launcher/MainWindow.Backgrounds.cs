@@ -61,7 +61,7 @@ public sealed partial class MainWindow
         catch (Exception e) when (e is IOException or ArgumentException)
         {
             preferences = preferences with { BackgroundFile = null, BackgroundPresetId = null };
-            SetStatus("背景图片无法读取，请重新选择。", true);
+            SetStatus("背景图片无法读取，请重新选择。", true, e.ToString());
         }
     }
 

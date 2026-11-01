@@ -9,8 +9,14 @@ using Avalonia.Threading;
 
 namespace Happyland.Launcher.Appearance;
 
-public sealed class ToastHost : Border
+public sealed class ToastHost : Grid
 {
+    private readonly Border card = new() { MinWidth = 160, MaxWidth = 240, BorderThickness = new Thickness(1), Opacity = 0, IsHitTestVisible = false, IsEnabled = false };
+    private readonly Button details = new() { Width = 20, Height = 20, MinHeight = 0, Padding = new Thickness(0),
+        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, IsVisible = false,
+        Content = new PixelIcon { Kind = PixelIconKind.Error, Width = 16, Height = 16 }, Classes = { "quiet" } };
+    private string? errorDetails;
+    public event Func<string, Task>? DetailsRequested;
     private readonly SelectableTextBlock message = new()
     {
         FontFamily = new FontFamily("avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 10px Prop zh_hans"),
@@ -28,17 +34,22 @@ public sealed class ToastHost : Border
 
     public ToastHost()
     {
-        MinWidth = 160;
-        MaxWidth = 240;
         HorizontalAlignment = HorizontalAlignment.Right;
         VerticalAlignment = VerticalAlignment.Top;
         Margin = new Thickness(12, 44, 12, 12);
-        BorderThickness = new Thickness(1);
-        Opacity = 0;
-        IsHitTestVisible = IsEnabled = false;
         ZIndex = 20;
-        this.Bind(BackgroundProperty, this.GetResourceObservable("PixelPanel"));
-        this.Bind(BorderBrushProperty, this.GetResourceObservable("PixelBorder"));
+        card.Bind(Border.BackgroundProperty, this.GetResourceObservable("PixelPanel"));
+        card.Bind(Border.BorderBrushProperty, this.GetResourceObservable("PixelBorder"));
+        details.Bind(Button.ForegroundProperty, this.GetResourceObservable("PixelError"));
+        ToolTip.SetTip(details, "查看错误详情");
+        ToolTip.SetPlacement(details, PlacementMode.Top);
+        AutomationProperties.SetName(details, "查看错误详情");
+        details.Click += async (_, _) =>
+        {
+            details.IsEnabled = false;
+            try { await DetailsRequested!(errorDetails!); }
+            finally { details.IsEnabled = true; }
+        };
         message.Bind(SelectableTextBlock.ForegroundProperty, this.GetResourceObservable("PixelText"));
         message.Bind(SelectableTextBlock.SelectionBrushProperty, this.GetResourceObservable("PixelAccent"));
         message.Bind(SelectableTextBlock.SelectionForegroundBrushProperty, this.GetResourceObservable("PixelAccentText"));
@@ -57,7 +68,9 @@ public sealed class ToastHost : Border
         Grid.SetRow(countdown, 1);
         var layout = new Grid { ColumnDefinitions = new ColumnDefinitions("2,*"), Children = { accent, body } };
         Grid.SetColumn(body, 1);
-        Child = layout;
+        card.Child = layout;
+        Children.Add(card);
+        Children.Add(details);
         timer.Tick += (_, _) =>
         {
             var fraction = elapsed.Elapsed.TotalSeconds / 3;
@@ -72,11 +85,13 @@ public sealed class ToastHost : Border
 
     public bool AnimationsEnabled
     {
-        set => Transitions = value ? new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(120) } } : null;
+        set => card.Transitions = value ? new Transitions { new DoubleTransition { Property = OpacityProperty, Duration = TimeSpan.FromMilliseconds(120) } } : null;
     }
 
-    public void Show(string text, bool error = false, bool persistent = false)
+    public void Show(string text, bool error = false, bool persistent = false, string? detail = null)
     {
+        errorDetails = error ? detail : null;
+        details.IsVisible = false;
         progressActive = false;
         progress.IsVisible = false;
         Present(text, error, persistent, dismissible: !persistent);
@@ -84,6 +99,8 @@ public sealed class ToastHost : Border
 
     public void BeginProgress(string text)
     {
+        errorDetails = null;
+        details.IsVisible = false;
         progressActive = true;
         progressDismissed = false;
         ShowProgress(text);
@@ -103,8 +120,9 @@ public sealed class ToastHost : Border
         if (progressActive) progressDismissed = true;
         timer.Stop();
         elapsed.Stop();
-        Opacity = 0;
-        IsHitTestVisible = IsEnabled = false;
+        card.Opacity = 0;
+        card.IsHitTestVisible = card.IsEnabled = false;
+        details.IsVisible = errorDetails is not null;
     }
 
     private void Present(string text, bool error, bool keepOpen, bool dismissible)
@@ -122,13 +140,13 @@ public sealed class ToastHost : Border
             accentBinding.Dispose();
             accentBinding = accent.Bind(BackgroundProperty, this.GetResourceObservable(error ? "PixelError" : "PixelAccent"));
         }
-        Opacity = 1;
-        IsHitTestVisible = IsEnabled = true;
+        card.Opacity = 1;
+        card.IsHitTestVisible = card.IsEnabled = true;
         ResumeCountdown();
     }
 
     private void ResumeCountdown()
     {
-        if (!persistent && !pointerOver && IsHitTestVisible) { elapsed.Start(); timer.Start(); }
+        if (!persistent && !pointerOver && card.IsHitTestVisible) { elapsed.Start(); timer.Start(); }
     }
 }

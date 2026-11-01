@@ -14,12 +14,18 @@ public sealed partial class MainWindow
 {
     private readonly Grid overlayLayer = new() { IsVisible = false, Margin = new Thickness(0, 32, 0, 0), ZIndex = 10 };
     private Action? cancelOverlay;
+    private Action? focusOverlay;
     private Control? restoreOverlayFocus;
 
     private async Task<T> ShowOverlayAsync<T>(Control content, string title, Action cancel, Task<T> result, Action focus, bool scrollContent = true)
     {
+        using var cancellation = lifetime.Token.Register(cancel);
         var previousFocus = FocusManager?.GetFocusedElement();
+        var previousCancel = cancelOverlay;
+        var previousOverlayFocus = focusOverlay;
+        var previousLayer = overlayLayer.Children.LastOrDefault();
         cancelOverlay = cancel;
+        focusOverlay = focus;
         var close = new Button { Width = 24, Height = 24, MinHeight = 0, Padding = new Thickness(0),
             Content = new PixelIcon { Kind = PixelIconKind.Close, Width = 12, Height = 12 }, Classes = { "quiet" } };
         close.Click += (_, _) => cancel();
@@ -46,26 +52,48 @@ public sealed partial class MainWindow
         {
             if (e.Key == Key.Escape) { cancel(); e.Handled = true; }
         }
-        overlayLayer.Children.Add(new Border { Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)) });
-        overlayLayer.Children.Add(frame);
+        var layer = new Grid { Children = { new Border { Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)) }, frame } };
+        if (previousLayer is not null) previousLayer.IsEnabled = false;
+        overlayLayer.Children.Add(layer);
         overlayLayer.IsVisible = true;
         bodySurface.IsEnabled = false;
         overlayLayer.SizeChanged += OnSizeChanged;
-        overlayLayer.AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Bubble);
+        layer.AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Bubble);
         FitPanel();
         Dispatcher.UIThread.Post(focus, DispatcherPriority.Loaded);
         try { return await result; }
         finally
         {
             overlayLayer.SizeChanged -= OnSizeChanged;
-            overlayLayer.RemoveHandler(KeyDownEvent, OnKeyDown);
-            overlayLayer.IsVisible = false;
-            overlayLayer.Children.Clear();
-            cancelOverlay = null;
-            bodySurface.IsEnabled = true;
+            layer.RemoveHandler(KeyDownEvent, OnKeyDown);
+            overlayLayer.Children.Remove(layer);
+            if (previousLayer is not null) previousLayer.IsEnabled = true;
+            overlayLayer.IsVisible = overlayLayer.Children.Count > 0;
+            cancelOverlay = previousCancel;
+            focusOverlay = previousOverlayFocus;
+            bodySurface.IsEnabled = !overlayLayer.IsVisible;
             toast.Hide();
             restoreOverlayFocus = previousFocus as Control ?? action;
         }
+    }
+
+    private async Task ShowErrorDetailsAsync(string details)
+    {
+        var view = new ErrorDetailsView(details, async () =>
+        {
+            try
+            {
+                await Clipboard!.SetTextAsync(details);
+                SetStatus("已复制");
+            }
+            catch (Exception e)
+            {
+                logger.Error("Could not copy error details", e);
+                SetStatus("复制失败，请重试。", true, e.ToString());
+            }
+        });
+        await ShowOverlayAsync(view, "错误详情", view.Close, view.Result, view.FocusFirstField, scrollContent: false);
+        RestoreOverlayFocus();
     }
 
     private void RestoreOverlayFocus()
@@ -73,6 +101,7 @@ public sealed partial class MainWindow
         var target = restoreOverlayFocus;
         restoreOverlayFocus = null;
         if (target is null || lifetime.IsCancellationRequested) return;
+        if (overlayLayer.IsVisible) { focusOverlay!(); return; }
         if (target.IsVisible && target.IsEnabled && target.GetVisualRoot() == this) target.Focus();
         else if (addAccount.IsEnabled && addAccount.GetVisualRoot() == this) addAccount.Focus();
         else navigation.First(pair => pair.Value.Classes.Contains("selected")).Value.Focus();

@@ -16,11 +16,12 @@ public sealed record GamePreferences
     public int Brightness { get; init; } = 50;
     public int GuiScale { get; init; }
 
-    public async Task ApplyAsync(string gameDirectory, CancellationToken ct)
+    public async Task ApplyAsync(string gameDirectory, string language, CancellationToken ct)
     {
         var path = Path.Combine(gameDirectory, "options.txt");
         var values = new Dictionary<string, string>(StringComparer.Ordinal)
         {
+            ["lang"] = language,
             ["fullscreen"] = FullScreen ? "true" : "false",
             ["renderDistance"] = RenderDistance.ToString(CultureInfo.InvariantCulture),
             ["maxFps"] = MaximumFps.ToString(CultureInfo.InvariantCulture),

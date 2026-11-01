@@ -1,6 +1,5 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Net.Http.Json;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -10,6 +9,7 @@ using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Happyland.Contracts;
 using Happyland.Launcher.Appearance;
+using Happyland.Launcher.Core;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Launcher;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Servers.Ping;
 
@@ -142,8 +142,7 @@ public sealed partial class MainWindow
     {
         using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         request.CancelAfter(TimeSpan.FromSeconds(8));
-        var items = await http.GetFromJsonAsync<LauncherAnnouncement[]>(new Uri(new Uri(LauncherDeployment.BackendUrl), "api/announcements"), request.Token)
-            ?? throw new UserActionException("公告暂时无法读取。");
+        var items = await ReadBackendAsync<LauncherAnnouncement[]>("api/announcements", request.Token);
         var view = new AnnouncementView(items);
         await ShowOverlayAsync(view, "更新公告", view.Cancel, view.Result, view.FocusFirstField, scrollContent: false);
     }
@@ -156,7 +155,7 @@ public sealed partial class MainWindow
     private void ConfigureRoutes()
     {
         if (servers.SelectedItem is not GameServer server) return;
-        var endpoints = new[] { new ServerRoute("main", "主线路", server.Host, server.Port) }.Concat(server.Routes ?? []).ToArray();
+        var endpoints = server.GetRoutes().ToArray();
         if (routesServerId == server.Id && routeOptions.Select(option => option.Route).SequenceEqual(endpoints)) return;
         var old = routeOptions;
         updatingRoutes = true;

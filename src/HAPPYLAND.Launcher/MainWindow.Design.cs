@@ -21,6 +21,8 @@ namespace Happyland.Launcher;
 
 public sealed partial class MainWindow
 {
+    private const double DefaultWindowWidth = 640;
+    private const double DefaultWindowHeight = 380;
     private readonly TextBlock serverName = Label("AssiahLand", "hero");
     private readonly TextBlock serverPlayers = Label("—", "stat");
     private readonly TextBlock serverCapacity = Label("", "small", "muted");
@@ -354,20 +356,21 @@ public sealed partial class MainWindow
     {
         var screen = CurrentScreen();
         var area = screen.WorkingArea;
+        var available = area.Size.ToSize(screen.Scaling);
         var previousScale = interfaceScale;
         var previousSize = ClientSize;
         var previousPosition = Position;
-        var scale = Math.Min(SelectedInterfaceScalePercent / 100d, Math.Min(area.Width / 940d, area.Height / 620d));
+        var scale = Math.Min(SelectedInterfaceScalePercent / 100d, Math.Min(available.Width / 470, available.Height / 310));
         if (interfaceViewport.LayoutTransform is null || interfaceScale != scale)
         {
             interfaceScale = scale;
             interfaceViewport.LayoutTransform = new ScaleTransform(scale, scale);
             chrome.PixelUnit = scale;
         }
-        MinWidth = Math.Min(940 * scale, area.Width) / screen.Scaling;
-        MinHeight = Math.Min(620 * scale, area.Height) / screen.Scaling;
-        MaxWidth = area.Width / screen.Scaling;
-        MaxHeight = area.Height / screen.Scaling;
+        MinWidth = Math.Min(470 * scale, available.Width);
+        MinHeight = Math.Min(310 * scale, available.Height);
+        MaxWidth = available.Width;
+        MaxHeight = available.Height;
         if (resizeWindow && previousScale != scale && WindowState == WindowState.Normal)
         {
             var width = Math.Clamp(previousSize.Width * scale / previousScale, MinWidth, MaxWidth);
@@ -385,10 +388,10 @@ public sealed partial class MainWindow
     private void InitializeWindowSize()
     {
         UpdateWindowScale(resizeWindow: false);
-        var width = preferences.RememberWindow ? preferences.WindowWidth : 1280;
-        var height = preferences.RememberWindow ? preferences.WindowHeight : 760;
-        Width = Math.Clamp(width * interfaceScale / CurrentScreen().Scaling, MinWidth, MaxWidth);
-        Height = Math.Clamp(height * interfaceScale / CurrentScreen().Scaling, MinHeight, MaxHeight);
+        var width = preferences.RememberWindow ? preferences.WindowWidth : DefaultWindowWidth;
+        var height = preferences.RememberWindow ? preferences.WindowHeight : DefaultWindowHeight;
+        Width = Math.Clamp(width * interfaceScale, MinWidth, MaxWidth);
+        Height = Math.Clamp(height * interfaceScale, MinHeight, MaxHeight);
         ScalingChanged += (_, _) => UpdateWindowScale(resizeWindow: false);
         PositionChanged += (_, _) => UpdateWindowScale(resizeWindow: false);
         Closing += (_, _) =>
@@ -397,7 +400,7 @@ public sealed partial class MainWindow
             {
                 preferences = CapturePreferences();
                 if (WindowState == WindowState.Normal)
-                    preferences = preferences with { WindowWidth = ClientSize.Width * RenderScaling / interfaceScale, WindowHeight = ClientSize.Height * RenderScaling / interfaceScale };
+                    preferences = preferences with { WindowWidth = ClientSize.Width / interfaceScale, WindowHeight = ClientSize.Height / interfaceScale };
                 Directory.CreateDirectory(root);
                 File.WriteAllText(Path.Combine(root, "settings.json"), System.Text.Json.JsonSerializer.Serialize(preferences));
             }

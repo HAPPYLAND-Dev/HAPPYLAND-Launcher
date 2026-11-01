@@ -4,7 +4,11 @@ public sealed record LauncherConfig(string PackVersion, string PackUrl, long Pac
     string MicrosoftClientId, IReadOnlyList<GameServer> Servers, IReadOnlyList<SkinServer> SkinServers,
     string HomeNotice = "", IReadOnlyList<LauncherShortcut>? Shortcuts = null);
 public sealed record GameServer(string Id, string Name, string Host, int Port = 25565,
-    IReadOnlyList<ServerRoute>? Routes = null);
+    IReadOnlyList<ServerRoute>? Routes = null)
+{
+    public IEnumerable<ServerRoute> GetRoutes() =>
+        new[] { new ServerRoute("main", "主线路", Host, Port) }.Concat(Routes ?? []);
+}
 public sealed record ServerRoute(string Id, string Name, string Host, int Port = 25565);
 public sealed record SkinServer(string Id, string Name, string Url);
 public sealed record LauncherShortcut(string Id, string Name, string Url, string Icon = "link");

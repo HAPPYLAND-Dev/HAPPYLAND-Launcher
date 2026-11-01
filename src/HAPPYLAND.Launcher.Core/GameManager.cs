@@ -4,6 +4,8 @@ using CmlLib.Core.Installers;
 using CmlLib.Core.Version;
 using CmlLib.Core.VersionLoader;
 using CmlLib.Core.VersionMetadata;
+using System.Globalization;
+using System.Text.Json;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Auth;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Installations.Loaders;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Java;
@@ -185,7 +187,7 @@ public sealed class GameManager
         neoForge.JavaPath = javaPath;
         var version = instance.Loader == TechTeaStudio.HyperionMinecraftLauncher.Core.Installations.ModLoader.None ? instance.VersionId :
             await loader.InstallAsync(instance.Loader, instance.VersionId, instance.LoaderVersion, null, ct);
-        if (preferences is not null) await preferences.ApplyAsync(instance.GameDirectory!, ct);
+        if (preferences is not null) await preferences.ApplyAsync(instance.GameDirectory!, await GetGameLanguageAsync(instance.VersionId, ct), ct);
         var startup = new GameStartupSignal();
         var launched = await underlying.StartProcessAsync(new LaunchRequest { VersionName = version, Session = account,
             GameDirectory = instance.GameDirectory, JavaPath = javaPath, QuickPlay = new QuickPlay.Multiplayer(host, port), ExtraJvmArguments = extraJvmArgs,
@@ -193,6 +195,26 @@ public sealed class GameManager
             MaximumRamMb = preferences?.MaximumMemoryMb, MinimumRamMb = preferences is null ? null : 512,
             ScreenWidth = preferences?.Width, ScreenHeight = preferences?.Height, FullScreen = preferences?.FullScreen ?? false }, true, ct);
         return new GameLaunchResult(launched.ProcessId, startup);
+    }
+
+    private async Task<string> GetGameLanguageAsync(string minecraftVersion, CancellationToken ct)
+    {
+        var culture = CultureInfo.CurrentUICulture;
+        if (culture.Equals(CultureInfo.InvariantCulture)) return "en_us";
+        var version = await launcher.GetVersionAsync(minecraftVersion, ct);
+        var indexPath = Path.Combine(gameDirectory, "assets", "indexes", version.AssetIndex!.Id + ".json");
+        await using var stream = File.OpenRead(indexPath);
+        using var index = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        var languages = index.RootElement.GetProperty("objects").EnumerateObject()
+            .Select(item => item.Name).Where(name => name.StartsWith("minecraft/lang/", StringComparison.Ordinal))
+            .Select(Path.GetFileNameWithoutExtension).Append("en_us").ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var name = culture.Name;
+        var chinese = name.StartsWith("zh-Hans", StringComparison.OrdinalIgnoreCase) ? "zh_cn" :
+            name.StartsWith("zh-Hant", StringComparison.OrdinalIgnoreCase) ? "zh_tw" : null;
+        string Code(CultureInfo value) => value.Name.Replace('-', '_').ToLowerInvariant();
+        var candidates = new[] { chinese, Code(culture), Code(CultureInfo.CreateSpecificCulture(name)),
+            Code(CultureInfo.CreateSpecificCulture(culture.TwoLetterISOLanguageName)) };
+        return candidates.FirstOrDefault(candidate => candidate is not null && languages.Contains(candidate)) ?? "en_us";
     }
 
     private sealed class LaunchVersionLoader(IVersionLoader online, IVersionLoader local) : IVersionLoader

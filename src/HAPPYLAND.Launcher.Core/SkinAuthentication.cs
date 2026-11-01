@@ -13,8 +13,9 @@ public static class SkinAuthentication
     {
         var endpoint = baseUrl.TrimEnd('/') + "/authserver/authenticate";
         using var response = await http.PostAsJsonAsync(endpoint, new { agent = new { name = "Minecraft", version = 1 }, username, password, clientToken = Guid.NewGuid().ToString("N"), requestUser = true }, ct);
-        if (!response.IsSuccessStatusCode)
-            throw new InvalidOperationException("皮肤站登录失败，请检查账号和密码。");
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden)
+            throw new UserActionException("皮肤站登录失败，请检查账号和密码。");
+        response.EnsureSuccessStatusCode();
         return ReadSession(await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct));
     }
 
@@ -33,7 +34,8 @@ public static class SkinAuthentication
 
     private static SkinSession ReadSession(JsonElement result)
     {
-        var profile = result.GetProperty("selectedProfile");
+        if (!result.TryGetProperty("selectedProfile", out var profile) || profile.ValueKind != JsonValueKind.Object)
+            throw new UserActionException("请先在皮肤站添加或选择角色。");
         var account = new AuthResult { Username = profile.GetProperty("name").GetString()!, Uuid = profile.GetProperty("id").GetString()!, AccessToken = result.GetProperty("accessToken").GetString()!, IsOffline = false };
         return new SkinSession(account, result.GetProperty("clientToken").GetString()!);
     }

@@ -44,6 +44,7 @@ public sealed partial class MainWindow : Window
     private readonly ComboBox servers = new() { HorizontalAlignment = HorizontalAlignment.Stretch, PlaceholderText = "暂无服务器" };
     private readonly ToastHost toast = new();
     private readonly TextBlock actionText = Label("下载游戏", "title");
+    private string primaryActionLabel = "下载游戏";
     private readonly Button action = new() { HorizontalAlignment = HorizontalAlignment.Stretch, Height = 30 };
     private readonly Button addAccount = new() { Width = 28, MinHeight = 0, VerticalAlignment = VerticalAlignment.Stretch, Padding = new Thickness(0), Content = new PixelIcon { Kind = PixelIconKind.Plus, Width = 12, Height = 12 } };
     private readonly StackPanel mods = new() { Spacing = 0 };
@@ -63,7 +64,7 @@ public sealed partial class MainWindow : Window
     private readonly MenuItem addMicrosoft = new() { Header = "添加微软账号" };
     private readonly MenuItem addSkin = new() { Header = "添加皮肤站账号" };
     private Control homePage = null!, modsPage = null!, settingsPage = null!, gameSettingsPage = null!;
-    private Settings preferences = new(BackgroundPresetId: "forest-path");
+    private Settings preferences = new(BackgroundPresetId: "forest-path", LogicalWindowSize: true);
     private MicrosoftAuthService? microsoft;
     private string? microsoftClientId;
     private LauncherConfig? config;
@@ -107,6 +108,7 @@ public sealed partial class MainWindow : Window
         ApplyAppearance();
         BuildInterface();
         WireActions();
+        toast.DetailsRequested += async details => await ShowErrorDetailsAsync(details);
         UpdateAccounts(preferences.SelectedAccount);
         SetAvailability();
         initializing = false;
@@ -205,6 +207,7 @@ public sealed partial class MainWindow : Window
         servers.ItemTemplate = new FuncDataTemplate<GameServer>((server, _) => Label(server?.Name ?? ""));
         accounts.SelectionChanged += async (_, _) =>
         {
+            UpdatePrimaryAction();
             if (!initializing && !busy) await TrySavePreferencesAsync();
             await LoadSelectedAvatarAsync();
         };
@@ -242,14 +245,14 @@ public sealed partial class MainWindow : Window
         catch (Exception e)
         {
             logger.Error("Launcher operation failed", e);
-            SetStatus(e is UserActionException or CredentialStorageException ? e.Message : errorText, true);
+            SetStatus(e is UserActionException or CredentialStorageException ? e.Message : errorText, true, e is UserActionException ? null : e.ToString());
         }
         finally { busy = false; SetAvailability(); RestoreOverlayFocus(); }
     }
 
     private void SetAvailability()
     {
-        action.IsEnabled = !busy && !gameRunning; accounts.IsEnabled = !busy; servers.IsEnabled = !busy && config is not null;
+        UpdatePrimaryAction(); accounts.IsEnabled = !busy; servers.IsEnabled = !busy && config is not null;
         addAccount.IsEnabled = !busy && config is not null;
         addMicrosoft.IsEnabled = microsoft is not null; addSkin.IsEnabled = config?.SkinServers.Count > 0;
         mods.IsEnabled = !busy && !gameRunning;
@@ -261,16 +264,24 @@ public sealed partial class MainWindow : Window
         UpdateAppearanceControls();
     }
 
-    private void SetStatus(string message, bool error = false) => toast.Show(message, error);
+    private void UpdatePrimaryAction()
+    {
+        var hasAccount = accounts.SelectedItem is LauncherAccount;
+        actionText.Text = hasAccount ? primaryActionLabel : "请添加账号";
+        action.IsEnabled = hasAccount && !busy && !gameRunning;
+    }
+
+    private void SetStatus(string message, bool error = false, string? details = null) => toast.Show(message, error, detail: details);
 
     private async Task RefreshAsync()
     {
         config = null;
         using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         request.CancelAfter(TimeSpan.FromSeconds(8));
-        var url = new Uri(new Uri(LauncherDeployment.BackendUrl), "api/launcher");
-        config = await http.GetFromJsonAsync<LauncherConfig>(url, request.Token) ?? throw new UserActionException("服务暂时不可用，请稍后重试。");
+        config = await ReadBackendAsync<LauncherConfig>("api/launcher", request.Token);
         installed = await packs.GetInstalledAsync(lifetime.Token);
+        if (installed is not null)
+            await GameServerList.SynchronizeAsync(installed.Instance.GameDirectory!, config.Servers, lifetime.Token);
         if (servers.ItemsSource is not IReadOnlyList<GameServer> previousServers || !SameServers(previousServers, config.Servers))
         {
             updatingServers = true;
@@ -289,8 +300,28 @@ public sealed partial class MainWindow : Window
         await SavePreferencesAsync();
     }
 
-    private async Task SetActionAsync() => actionText.Text = installed is null || !game.HasGameFiles ? "下载游戏" :
-        config is not null && PackManager.IsCurrent(installed, config) && await game.IsPreparedAsync(installed) ? "启动游戏" : "更新游戏";
+    private async Task<T> ReadBackendAsync<T>(string path, CancellationToken ct)
+    {
+        using var response = await http.GetAsync(new Uri(new Uri(LauncherDeployment.BackendUrl), path), ct);
+        if (!response.IsSuccessStatusCode)
+        {
+            var detail = response.ReasonPhrase;
+            if (response.Content.Headers.ContentType?.MediaType == "application/problem+json")
+            {
+                var problem = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+                if (problem.TryGetProperty("detail", out var value) && value.ValueKind == JsonValueKind.String) detail = value.GetString();
+            }
+            throw new HttpRequestException($"后端请求失败（{(int)response.StatusCode}）：{detail}", null, response.StatusCode);
+        }
+        return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct) ?? throw new InvalidDataException("后端返回了空数据。");
+    }
+
+    private async Task SetActionAsync()
+    {
+        primaryActionLabel = installed is null || !game.HasGameFiles ? "下载游戏" :
+            config is not null && PackManager.IsCurrent(installed, config) && await game.IsPreparedAsync(installed) ? "启动游戏" : "更新游戏";
+        UpdatePrimaryAction();
+    }
 
     private async Task ConfigureMicrosoftAsync()
     {
@@ -385,6 +416,7 @@ public sealed partial class MainWindow : Window
                 toast.ShowProgress(p.Fraction is double value ? $"{stage}：{value:P0}" : stage, p.Fraction);
             });
             await game.PrepareAsync(installed!, null, gameProgress, lifetime.Token);
+            await GameServerList.SynchronizeAsync(installed!.Instance.GameDirectory!, config!.Servers, lifetime.Token);
             await SetActionAsync(); RefreshMods(); SetStatus("游戏已准备好"); return;
         }
         if (servers.SelectedItem is not GameServer server) throw new UserActionException("请选择服务器。");
@@ -432,8 +464,16 @@ public sealed partial class MainWindow : Window
     {
         var path = Path.Combine(root, "settings.json");
         if (!File.Exists(path)) return;
-        try { preferences = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path)) ?? preferences; }
-        catch (JsonException) { SetStatus("外观设置无法读取，已使用默认配色。", true); }
+        try
+        {
+            preferences = JsonSerializer.Deserialize<Settings>(File.ReadAllText(path)) ?? preferences;
+            if (!preferences.LogicalWindowSize)
+            {
+                // Earlier releases stored physical pixels measured on a 200% display.
+                preferences = preferences with { WindowWidth = preferences.WindowWidth / 2, WindowHeight = preferences.WindowHeight / 2, LogicalWindowSize = true };
+            }
+        }
+        catch (JsonException e) { SetStatus("外观设置无法读取，已使用默认配色。", true, e.ToString()); }
     }
 
     private async Task SavePreferencesAsync()
@@ -457,7 +497,7 @@ public sealed partial class MainWindow : Window
         try { await SavePreferencesAsync(); return true; }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { return false; }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        { logger.Error("Could not save launcher settings", e); toast.Show("设置未能保存，请重试。", true); return false; }
+        { logger.Error("Could not save launcher settings", e); SetStatus("设置未能保存，请重试。", true, e.ToString()); return false; }
     }
 
     private void LoadSkinAccounts()
@@ -469,7 +509,7 @@ public sealed partial class MainWindow : Window
             var saved = JsonSerializer.Deserialize<List<SavedSkinAccount>>(File.ReadAllText(path)) ?? [];
             accountList.AddRange(saved.Select(a => new LauncherAccount(a.Name, null, a.Server, null, a.Login, a.Uuid)));
         }
-        catch (JsonException) { SetStatus("保存的皮肤站账号无法读取，请重新添加。", true); }
+        catch (JsonException e) { SetStatus("保存的皮肤站账号无法读取，请重新添加。", true, e.ToString()); }
     }
 
     private async Task<SkinSession?> ReadSkinCredentialAsync(LauncherAccount account)
@@ -511,7 +551,7 @@ public sealed partial class MainWindow : Window
                 var enabledPath = Path.Combine(directory, name); var disabledPath = enabledPath + ".disabled";
                 try { File.Move(check.IsChecked == true ? disabledPath : enabledPath, check.IsChecked == true ? enabledPath : disabledPath); }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-                { logger.Error("Could not change mod state", e); SetStatus("更改失败，请重试。", true); RefreshMods(); }
+                { logger.Error("Could not change mod state", e); SetStatus("更改失败，请重试。", true, e.ToString()); RefreshMods(); }
             };
             mods.Children.Add(separator);
         }
@@ -524,9 +564,8 @@ public sealed partial class MainWindow : Window
         return label;
     }
 
-    private sealed record Settings(string Theme = "雾蓝", string? BackgroundFile = null, bool AutoPalette = true, string? SelectedServerId = null, string? SelectedAccount = null, GamePreferences? Game = null, string Accent = "主题默认", int BackgroundOpacity = 100, int BackgroundShade = 20, string TextSize = "标准", bool Animations = true, bool RememberWindow = true, string OnGameStart = "保持窗口", double WindowWidth = 1280, double WindowHeight = 760, string StartupPage = "游玩", Dictionary<string, string>? SelectedRoutes = null, int InterfaceScalePercent = 150, string? BackgroundPresetId = null, List<CustomBackground>? CustomBackgrounds = null, Dictionary<string, BackgroundAdjustment>? BackgroundAdjustments = null);
+    private sealed record Settings(string Theme = "雾蓝", string? BackgroundFile = null, bool AutoPalette = true, string? SelectedServerId = null, string? SelectedAccount = null, GamePreferences? Game = null, string Accent = "主题默认", int BackgroundOpacity = 100, int BackgroundShade = 20, string TextSize = "标准", bool Animations = true, bool RememberWindow = true, string OnGameStart = "保持窗口", double WindowWidth = DefaultWindowWidth, double WindowHeight = DefaultWindowHeight, string StartupPage = "游玩", Dictionary<string, string>? SelectedRoutes = null, int InterfaceScalePercent = 150, string? BackgroundPresetId = null, List<CustomBackground>? CustomBackgrounds = null, Dictionary<string, BackgroundAdjustment>? BackgroundAdjustments = null, bool LogicalWindowSize = false);
     private sealed record SavedSkinAccount(string Name, SkinServer Server, string Login, string? Uuid = null);
-    private sealed class UserActionException(string message) : Exception(message);
     private sealed record LauncherAccount(string Name, string? MicrosoftId, SkinServer? SkinServer, AuthResult? Session, string? Login, string? Uuid, string? ClientToken = null) : INotifyPropertyChanged
     {
         private Bitmap? skin;
