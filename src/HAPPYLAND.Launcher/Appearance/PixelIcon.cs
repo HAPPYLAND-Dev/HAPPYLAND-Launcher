@@ -4,7 +4,7 @@ using Avalonia.Media;
 
 namespace Happyland.Launcher.Appearance;
 
-public enum PixelIconKind { Play, Plus, Down, Gear, Close, Minimize, Check, File, Maximize, Restore, Palette, Folder, Bell, Book, Skin, Link }
+public enum PixelIconKind { Play, Plus, Down, Gear, Close, Minimize, Check, File, Maximize, Restore, Palette, Folder, Bell, Book, Skin, Link, Prohibited }
 
 public sealed class PixelIcon : Control
 {
@@ -31,7 +31,8 @@ public sealed class PixelIcon : Control
         ["0001000", "0011100", "0100010", "0100010", "0100010", "1111111", "0001000"],
         ["1110111", "1010101", "1010101", "1010101", "1010101", "1111111", "0001000"],
         ["1100011", "1110111", "0111110", "0100010", "0100010", "0100010", "0111110"],
-        ["0011100", "0101010", "1001001", "1111111", "1001001", "0101010", "0011100"]
+        ["0011100", "0101010", "1001001", "1111111", "1001001", "0101010", "0011100"],
+        ["0011100", "0100010", "1000101", "1001001", "1010001", "0100010", "0011100"]
     ];
 
     static PixelIcon() => AffectsRender<PixelIcon>(KindProperty, ForegroundProperty);

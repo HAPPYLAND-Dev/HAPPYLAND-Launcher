@@ -54,6 +54,9 @@ public static class PixelTheme
         }
         colors["PixelPanelHover"] = Mix(colors["PixelPanel"], colors["PixelText"], .05);
         colors["PixelPanelPressed"] = Mix(colors["PixelPanel"], colors["PixelText"], .13);
+        colors["PixelButton"] = background is null ? colors["PixelPanel"] : Mix(colors["PixelPanel"], Colors.White, palette.Dark ? .07 : .25);
+        colors["PixelButtonHover"] = background is null ? colors["PixelPanelHover"] : Mix(colors["PixelButton"], colors["PixelText"], .06);
+        colors["PixelButtonPressed"] = background is null ? colors["PixelPanelPressed"] : Mix(colors["PixelButton"], colors["PixelText"], .12);
         colors["PixelHeaderHover"] = Mix(colors["PixelHeader"], colors["PixelText"], .07);
         colors["PixelHeaderPressed"] = Mix(colors["PixelHeader"], colors["PixelText"], .12);
         colors["PixelBorderHover"] = Mix(colors["PixelBorder"], colors["PixelText"], .22);
@@ -65,6 +68,7 @@ public static class PixelTheme
             {
                 ("PixelHeader", 196), ("PixelHeaderHover", 216), ("PixelHeaderPressed", 230),
                 ("PixelPanel", 190), ("PixelPanelHover", 212), ("PixelPanelPressed", 228),
+                ("PixelButton", 210), ("PixelButtonHover", 226), ("PixelButtonPressed", 238),
                 ("PixelAccent", 238), ("PixelAccentHover", 246), ("PixelAccentPressed", 246)
             })
             {
@@ -137,7 +141,7 @@ public static class PixelTheme
         var background = Mix(dominant, baseColor, dark ? .82 : .94);
         var header = Mix(dominant, baseColor, dark ? .70 : .85);
         var panel = Mix(dominant, baseColor, dark ? .62 : .96);
-        var accent = Mix(dominant, dark ? nearWhite : nearBlack, dark ? .56 : .48);
+        var accent = Mix(dominant, dark ? nearWhite : nearBlack, dark ? .64 : .42);
         var accentLuminance = Luminance(accent);
         var accentText = (accentLuminance + .05) / (Luminance(nearBlack) + .05)
             >= (Luminance(nearWhite) + .05) / (accentLuminance + .05) ? nearBlack : nearWhite;

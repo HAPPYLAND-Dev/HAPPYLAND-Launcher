@@ -48,6 +48,8 @@ public sealed partial class MainWindow
     {
         var button = new Button { Width = 32, Height = 32, MinHeight = 0, Padding = new Thickness(0), Content = icon };
         ToolTip.SetTip(button, name);
+        ToolTip.SetPlacement(button, PlacementMode.Top);
+        ToolTip.SetVerticalOffset(button, -4);
         Avalonia.Automation.AutomationProperties.SetName(button, name);
         button.Click += async (_, _) => await ExecuteAsync(action, "暂时无法打开，请稍后重试。");
         return button;

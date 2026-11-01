@@ -51,17 +51,19 @@ public sealed partial class MainWindow : Window
     private readonly SemaphoreSlim preferenceSaveLock = new(1, 1);
     private readonly ComboBox theme = new() { ItemsSource = PixelTheme.PresetNames, HorizontalAlignment = HorizontalAlignment.Stretch };
     private readonly CheckBox autoPalette = new() { Content = "跟随背景配色", IsChecked = true };
-    private readonly TextBlock backgroundLabel = Label("无", "muted");
-    private readonly Image backgroundImage = new() { Stretch = Stretch.UniformToFill, IsHitTestVisible = false };
+    private readonly ImageBrush backgroundBrush = new() { Stretch = Stretch.UniformToFill };
+    private readonly Border backgroundImage = new() { IsHitTestVisible = false };
     private readonly TransitioningContentControl page = new();
     private readonly Grid viewport = new();
+    private readonly LayoutTransformControl interfaceViewport = new();
+    private double interfaceScale = 1.5;
     private readonly PixelWindowChrome chrome = new();
     private readonly Dictionary<string, Button> navigation = [];
     private readonly List<Control> editingControls = [];
     private readonly MenuItem addMicrosoft = new() { Header = "添加微软账号" };
     private readonly MenuItem addSkin = new() { Header = "添加皮肤站账号" };
     private Control homePage = null!, modsPage = null!, settingsPage = null!, gameSettingsPage = null!;
-    private Settings preferences = new();
+    private Settings preferences = new(BackgroundPresetId: "forest-path");
     private MicrosoftAuthService? microsoft;
     private string? microsoftClientId;
     private LauncherConfig? config;
@@ -83,7 +85,9 @@ public sealed partial class MainWindow : Window
         UseLayoutRounding = true;
         RenderOptions.SetBitmapInterpolationMode(this, BitmapInterpolationMode.None);
         RenderOptions.SetEdgeMode(this, EdgeMode.Aliased);
-        RenderOptions.SetTextRenderingMode(this, TextRenderingMode.Alias);
+        RenderOptions.SetTextRenderingMode(this, TextRenderingMode.Antialias);
+        RenderOptions.SetBitmapInterpolationMode(backgroundImage, BitmapInterpolationMode.HighQuality);
+        backgroundImage.Background = backgroundBrush;
         using (var icon = AssetLoader.Open(new Uri("avares://HAPPYLAND.Launcher/Assets/server-icon.png"))) Icon = new WindowIcon(icon);
         root = Environment.GetEnvironmentVariable("HAPPYLAND_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAPPYLAND");
         logger = new SerilogLauncherLogger(Path.Combine(root, "logs"));
@@ -97,6 +101,7 @@ public sealed partial class MainWindow : Window
         selectedServerId = preferences.SelectedServerId;
         theme.SelectedItem = PixelTheme.PresetNames.Contains(preferences.Theme) ? preferences.Theme : "雾蓝";
         autoPalette.IsChecked = preferences.AutoPalette;
+        InitializeBackgrounds();
         LoadBackground();
         InitializeOptions();
         ApplyAppearance();
@@ -122,6 +127,7 @@ public sealed partial class MainWindow : Window
             runningGame?.Dispose();
             avatarCancellation?.Cancel();
             backgroundBitmap?.Dispose();
+            foreach (var thumbnail in backgroundThumbnails) thumbnail.Dispose();
             foreach (var account in accountList) account.Skin?.Dispose();
             http.Dispose(); skinHttp.Dispose();
         };
@@ -129,7 +135,8 @@ public sealed partial class MainWindow : Window
 
     private Control BuildWindowFrame()
     {
-        chrome.Child = viewport;
+        interfaceViewport.Child = viewport;
+        chrome.Child = interfaceViewport;
         chrome.Bind(PixelWindowChrome.BackgroundProperty, this.GetResourceObservable("PixelBackground"));
         chrome.Bind(PixelWindowChrome.BorderBrushProperty, this.GetResourceObservable("PixelBorder"));
         WindowEdge? EdgeAt(Point point)
@@ -453,50 +460,6 @@ public sealed partial class MainWindow : Window
         { logger.Error("Could not save launcher settings", e); toast.Show("设置未能保存，请重试。", true); return false; }
     }
 
-    private void LoadBackground()
-    {
-        if (preferences.BackgroundFile is null) return;
-        try
-        {
-            using var input = File.OpenRead(preferences.BackgroundFile);
-            backgroundBitmap = Bitmap.DecodeToWidth(input, 1600, BitmapInterpolationMode.HighQuality);
-            backgroundLabel.Text = "已设置";
-        }
-        catch (Exception e) when (e is IOException or ArgumentException)
-        { preferences = preferences with { BackgroundFile = null }; SetStatus("背景图片无法读取，请重新选择。", true); }
-    }
-
-    private async Task ChooseBackgroundAsync()
-    {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "选择背景图片", AllowMultiple = false, FileTypeFilter = [FilePickerFileTypes.ImageAll]
-        });
-        if (files.Count == 0) return;
-        await using var input = await files[0].OpenReadAsync();
-        using var data = new MemoryStream();
-        await input.CopyToAsync(data, lifetime.Token);
-        var bytes = data.ToArray();
-        var bitmap = await Task.Run(() =>
-        {
-            using var stream = new MemoryStream(bytes, writable: false);
-            return Bitmap.DecodeToWidth(stream, 1600, BitmapInterpolationMode.HighQuality);
-        }, lifetime.Token);
-        var path = Path.Combine(root, "appearance", "background.image");
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var staged = path + ".tmp";
-            await File.WriteAllBytesAsync(staged, bytes, lifetime.Token);
-            lifetime.Token.ThrowIfCancellationRequested();
-            File.Move(staged, path, overwrite: true);
-        }
-        catch { bitmap.Dispose(); throw; }
-        backgroundImage.Source = null; backgroundBitmap?.Dispose(); backgroundBitmap = bitmap;
-        preferences = preferences with { BackgroundFile = path }; backgroundLabel.Text = "已设置";
-        ApplyAppearance(); await SavePreferencesAsync(); SetStatus("背景图片已保存");
-    }
-
     private void LoadSkinAccounts()
     {
         var path = Path.Combine(root, "skin-accounts.json");
@@ -561,7 +524,7 @@ public sealed partial class MainWindow : Window
         return label;
     }
 
-    private sealed record Settings(string Theme = "雾蓝", string? BackgroundFile = null, bool AutoPalette = true, string? SelectedServerId = null, string? SelectedAccount = null, GamePreferences? Game = null, string Accent = "主题默认", int BackgroundOpacity = 100, int BackgroundShade = 20, string TextSize = "标准", bool Animations = true, bool RememberWindow = true, string OnGameStart = "保持窗口", double WindowWidth = 1280, double WindowHeight = 760, string StartupPage = "游玩", Dictionary<string, string>? SelectedRoutes = null);
+    private sealed record Settings(string Theme = "雾蓝", string? BackgroundFile = null, bool AutoPalette = true, string? SelectedServerId = null, string? SelectedAccount = null, GamePreferences? Game = null, string Accent = "主题默认", int BackgroundOpacity = 100, int BackgroundShade = 20, string TextSize = "标准", bool Animations = true, bool RememberWindow = true, string OnGameStart = "保持窗口", double WindowWidth = 1280, double WindowHeight = 760, string StartupPage = "游玩", Dictionary<string, string>? SelectedRoutes = null, int InterfaceScalePercent = 150, string? BackgroundPresetId = null, List<CustomBackground>? CustomBackgrounds = null, Dictionary<string, BackgroundAdjustment>? BackgroundAdjustments = null);
     private sealed record SavedSkinAccount(string Name, SkinServer Server, string Login, string? Uuid = null);
     private sealed class UserActionException(string message) : Exception(message);
     private sealed record LauncherAccount(string Name, string? MicrosoftId, SkinServer? SkinServer, AuthResult? Session, string? Login, string? Uuid, string? ClientToken = null) : INotifyPropertyChanged

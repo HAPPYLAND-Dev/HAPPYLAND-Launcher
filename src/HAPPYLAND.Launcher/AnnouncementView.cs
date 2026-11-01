@@ -45,10 +45,11 @@ public sealed class AnnouncementView : UserControl
         var date = new TextBlock { Classes = { "small", "muted" } };
         var text = new SelectableTextBlock
         {
-            FontFamily = new FontFamily("avares://HAPPYLAND.Launcher/Assets/Fonts#Fusion Pixel 12px Prop zh_hans"),
-            TextWrapping = TextWrapping.Wrap, LineHeight = 18
+            TextWrapping = TextWrapping.Wrap
         };
+        text.Bind(SelectableTextBlock.FontFamilyProperty, this.GetResourceObservable("LauncherFontFamily"));
         text.Bind(SelectableTextBlock.FontSizeProperty, this.GetResourceObservable("LauncherFontSize"));
+        text.Bind(SelectableTextBlock.LineHeightProperty, this.GetResourceObservable("LauncherFontLineHeight"));
         text.Bind(SelectableTextBlock.ForegroundProperty, this.GetResourceObservable("PixelText"));
         text.Bind(SelectableTextBlock.SelectionBrushProperty, this.GetResourceObservable("PixelAccent"));
         text.Bind(SelectableTextBlock.SelectionForegroundBrushProperty, this.GetResourceObservable("PixelAccentText"));

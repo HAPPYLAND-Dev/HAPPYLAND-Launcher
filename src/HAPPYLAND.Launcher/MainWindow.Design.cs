@@ -28,6 +28,8 @@ public sealed partial class MainWindow
     private readonly TextBox modSearch = new() { Watermark = "搜索 Mod" };
     private readonly ComboBox accentChoice = Choice(["主题默认", "薄荷", "琥珀", "鸢尾", "珊瑚"]);
     private readonly ComboBox textSize = Choice(["紧凑", "标准", "宽松"]);
+    private readonly ComboBox interfaceZoom = Choice(["100%", "125%", "150%"]);
+    private int SelectedInterfaceScalePercent => interfaceZoom.SelectedIndex switch { 0 => 100, 1 => 125, _ => 150 };
     private readonly CheckBox animatePages = new() { Content = "页面动画" };
     private readonly CheckBox rememberWindow = new() { Content = "记住窗口大小" };
     private readonly ComboBox afterLaunch = Choice(["保持窗口", "最小化窗口"]);
@@ -68,6 +70,7 @@ public sealed partial class MainWindow
         accentChoice.SelectedItem = preferences.Accent; textSize.SelectedItem = preferences.TextSize;
         if (accentChoice.SelectedIndex < 0) accentChoice.SelectedIndex = 0;
         if (textSize.SelectedIndex < 0) textSize.SelectedIndex = 1;
+        interfaceZoom.SelectedIndex = preferences.InterfaceScalePercent switch { 100 => 0, 125 => 1, _ => 2 };
         backgroundOpacity.Value = preferences.BackgroundOpacity; backgroundShade.Value = preferences.BackgroundShade;
         animatePages.IsChecked = preferences.Animations; rememberWindow.IsChecked = preferences.RememberWindow;
         afterLaunch.SelectedItem = preferences.OnGameStart;
@@ -118,7 +121,7 @@ public sealed partial class MainWindow
         homePage = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Children = { homeContent, shortcutBar } };
         Grid.SetRow(shortcutBar, 1);
         modSearch.TextChanged += (_, _) => RefreshMods();
-        modsPage = Page("Mod 管理", new StackPanel { Spacing = 14, Children = { modSearch, modCount, mods } });
+        modsPage = Page("Mod 管理", new StackPanel { Spacing = 14, Children = { modSearch, modCount, Card(mods) } });
         settingsPage = BuildSettings(); gameSettingsPage = BuildGameSettings();
         var sidebar = BuildSidebar();
         var body = bodySurface;
@@ -197,22 +200,13 @@ public sealed partial class MainWindow
 
     private Control BuildSettings()
     {
-        backgroundLabel.VerticalAlignment = VerticalAlignment.Center;
-        var choose = new Button { Content = "选择图片" };
-        var remove = new Button { Content = "移除" };
-        choose.Click += async (_, _) => await ExecuteAsync(ChooseBackgroundAsync, "图片无法打开，请选择其他图片。");
-        remove.Click += async (_, _) => await ExecuteAsync(async () =>
-        {
-            backgroundImage.Source = null; backgroundBitmap?.Dispose(); backgroundBitmap = null;
-            preferences = preferences with { BackgroundFile = null }; backgroundLabel.Text = "无";
-            ApplyAppearance(); await SavePreferencesAsync(); SetStatus("背景图片已移除");
-        });
+        var gallery = BuildBackgroundGallery();
         var save = SaveButton();
-        editingControls.AddRange([theme, accentChoice, textSize, backgroundOpacity, backgroundShade, autoPalette, animatePages, rememberWindow, afterLaunch, startupPage, choose, remove, save]);
+        editingControls.AddRange([theme, accentChoice, textSize, interfaceZoom, backgroundOpacity, backgroundShade, autoPalette, animatePages, rememberWindow, afterLaunch, startupPage, save]);
         return Page("启动器外观", new StackPanel { Spacing = 14, Children =
         {
-            Section("配色", Field("预设主题", theme), Field("强调色", accentChoice), Field("字号", textSize)),
-            Section("背景", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { backgroundLabel, choose, remove } }, autoPalette,
+            Section("界面", Field("界面缩放", interfaceZoom), Field("字号", textSize), Field("预设主题", theme), Field("强调色", accentChoice)),
+            Section("背景", gallery, autoPalette,
                 Field("图片强度 %", backgroundOpacity), Field("暗化程度 %", backgroundShade)),
             Section("使用习惯", animatePages, rememberWindow, Field("启动页面", startupPage), Field("启动游戏后", afterLaunch)), save
         } });
@@ -289,8 +283,21 @@ public sealed partial class MainWindow
         animatePages.IsCheckedChanged += (_, _) => ApplyMotion();
         accentChoice.SelectionChanged += (_, _) => { if (!initializing) ApplyAppearance(); };
         textSize.SelectionChanged += (_, _) => { if (!initializing) ApplyAppearance(); };
-        backgroundOpacity.ValueChanged += (_, _) => backgroundImage.Opacity = (double)(backgroundOpacity.Value ?? 35) / 100;
-        backgroundShade.ValueChanged += (_, _) => backgroundDim.Opacity = (double)(backgroundShade.Value ?? 35) / 100;
+        interfaceZoom.SelectionChanged += async (_, _) =>
+        {
+            UpdateWindowScale(resizeWindow: true);
+            await TrySavePreferencesAsync();
+        };
+        backgroundOpacity.ValueChanged += async (_, _) =>
+        {
+            backgroundImage.Opacity = (double)(backgroundOpacity.Value ?? 60) / 100;
+            await SaveBackgroundAdjustmentAsync();
+        };
+        backgroundShade.ValueChanged += async (_, _) =>
+        {
+            backgroundDim.Opacity = (double)(backgroundShade.Value ?? 30) / 100;
+            await SaveBackgroundAdjustmentAsync();
+        };
     }
     private void ApplyMotion()
     {
@@ -301,12 +308,9 @@ public sealed partial class MainWindow
     private void ApplyAppearance()
     {
         PixelTheme.Apply(Application.Current!, theme.SelectedItem as string ?? "雾蓝", autoPalette.IsChecked == true ? backgroundBitmap : null, accentChoice.SelectedItem as string ?? "主题默认", backgroundBitmap is not null);
-        var scale = (textSize.SelectedItem as string) switch { "紧凑" => .9, "宽松" => 1.1, _ => 1.0 };
-        Application.Current!.Resources["LauncherFontSize"] = 12d * scale;
-        Application.Current.Resources["LauncherSmallSize"] = 10d * scale;
-        Application.Current.Resources["LauncherTitleSize"] = 20d * scale;
-        Application.Current.Resources["LauncherSectionSize"] = 16d * scale;
-        backgroundImage.Source = backgroundBitmap;
+        PixelTypography.Apply(Application.Current!, textSize.SelectedItem as string ?? "标准");
+        backgroundBrush.Source = backgroundBitmap;
+        backgroundBrush.AlignmentY = BackgroundPreset.All.FirstOrDefault(item => item.Id == preferences.BackgroundPresetId)?.Alignment ?? AlignmentY.Center;
         backgroundImage.Opacity = (double)(backgroundOpacity.Value ?? 35) / 100;
         backgroundDim.IsVisible = backgroundBitmap is not null;
         backgroundDim.Opacity = (double)(backgroundShade.Value ?? 35) / 100;
@@ -319,6 +323,7 @@ public sealed partial class MainWindow
         var followingBackground = backgroundBitmap is not null && autoPalette.IsChecked == true;
         theme.IsEnabled = accentChoice.IsEnabled = !busy && !followingBackground;
         autoPalette.IsEnabled = !busy && backgroundBitmap is not null;
+        backgroundOpacity.IsEnabled = backgroundShade.IsEnabled = !busy && backgroundBitmap is not null;
     }
 
     private Settings CapturePreferences() => preferences with
@@ -326,7 +331,10 @@ public sealed partial class MainWindow
         Game = ReadGamePreferences(), Accent = accentChoice.SelectedItem as string ?? "主题默认", TextSize = textSize.SelectedItem as string ?? "标准",
         BackgroundOpacity = (int)(backgroundOpacity.Value ?? 35), BackgroundShade = (int)(backgroundShade.Value ?? 35), Animations = animatePages.IsChecked == true,
         RememberWindow = rememberWindow.IsChecked == true, OnGameStart = afterLaunch.SelectedItem as string ?? "保持窗口", StartupPage = startupPage.SelectedItem as string ?? "游玩",
-        SelectedRoutes = new Dictionary<string, string>(selectedRoutes, StringComparer.Ordinal)
+        SelectedRoutes = new Dictionary<string, string>(selectedRoutes, StringComparer.Ordinal),
+        InterfaceScalePercent = SelectedInterfaceScalePercent,
+        CustomBackgrounds = customBackgrounds.ToList(),
+        BackgroundAdjustments = new Dictionary<string, BackgroundAdjustment>(backgroundAdjustments, StringComparer.Ordinal)
     };
     private GamePreferences ReadGamePreferences()
     {
@@ -340,32 +348,56 @@ public sealed partial class MainWindow
         };
     }
 
+    private Screen CurrentScreen() => Screens.ScreenFromWindow(this) ?? Screens.Primary!;
+
+    private void UpdateWindowScale(bool resizeWindow)
+    {
+        var screen = CurrentScreen();
+        var area = screen.WorkingArea;
+        var previousScale = interfaceScale;
+        var previousSize = ClientSize;
+        var previousPosition = Position;
+        var scale = Math.Min(SelectedInterfaceScalePercent / 100d, Math.Min(area.Width / 940d, area.Height / 620d));
+        if (interfaceViewport.LayoutTransform is null || interfaceScale != scale)
+        {
+            interfaceScale = scale;
+            interfaceViewport.LayoutTransform = new ScaleTransform(scale, scale);
+            chrome.PixelUnit = scale;
+        }
+        MinWidth = Math.Min(940 * scale, area.Width) / screen.Scaling;
+        MinHeight = Math.Min(620 * scale, area.Height) / screen.Scaling;
+        MaxWidth = area.Width / screen.Scaling;
+        MaxHeight = area.Height / screen.Scaling;
+        if (resizeWindow && previousScale != scale && WindowState == WindowState.Normal)
+        {
+            var width = Math.Clamp(previousSize.Width * scale / previousScale, MinWidth, MaxWidth);
+            var height = Math.Clamp(previousSize.Height * scale / previousScale, MinHeight, MaxHeight);
+            var physicalWidth = (int)Math.Round(width * screen.Scaling);
+            var physicalHeight = (int)Math.Round(height * screen.Scaling);
+            var x = (int)Math.Round(previousPosition.X + (previousSize.Width - width) * screen.Scaling / 2);
+            var y = (int)Math.Round(previousPosition.Y + (previousSize.Height - height) * screen.Scaling / 2);
+            Width = width;
+            Height = height;
+            Position = new PixelPoint(Math.Clamp(x, area.X, area.Right - physicalWidth), Math.Clamp(y, area.Y, area.Bottom - physicalHeight));
+        }
+    }
+
     private void InitializeWindowSize()
     {
-        chrome.PixelUnit = 1;
-        Screen CurrentScreen() => Screens.ScreenFromWindow(this) ?? Screens.Primary!;
-        void UpdateLimits()
-        {
-            var screen = CurrentScreen();
-            MinWidth = Math.Min(940, screen.WorkingArea.Width) / screen.Scaling;
-            MinHeight = Math.Min(620, screen.WorkingArea.Height) / screen.Scaling;
-            MaxWidth = screen.WorkingArea.Width / screen.Scaling;
-            MaxHeight = screen.WorkingArea.Height / screen.Scaling;
-        }
-        UpdateLimits();
+        UpdateWindowScale(resizeWindow: false);
         var width = preferences.RememberWindow ? preferences.WindowWidth : 1280;
         var height = preferences.RememberWindow ? preferences.WindowHeight : 760;
-        Width = Math.Clamp(width / CurrentScreen().Scaling, MinWidth, MaxWidth);
-        Height = Math.Clamp(height / CurrentScreen().Scaling, MinHeight, MaxHeight);
-        ScalingChanged += (_, _) => UpdateLimits();
-        PositionChanged += (_, _) => UpdateLimits();
+        Width = Math.Clamp(width * interfaceScale / CurrentScreen().Scaling, MinWidth, MaxWidth);
+        Height = Math.Clamp(height * interfaceScale / CurrentScreen().Scaling, MinHeight, MaxHeight);
+        ScalingChanged += (_, _) => UpdateWindowScale(resizeWindow: false);
+        PositionChanged += (_, _) => UpdateWindowScale(resizeWindow: false);
         Closing += (_, _) =>
         {
             try
             {
                 preferences = CapturePreferences();
                 if (WindowState == WindowState.Normal)
-                    preferences = preferences with { WindowWidth = ClientSize.Width * RenderScaling, WindowHeight = ClientSize.Height * RenderScaling };
+                    preferences = preferences with { WindowWidth = ClientSize.Width * RenderScaling / interfaceScale, WindowHeight = ClientSize.Height * RenderScaling / interfaceScale };
                 Directory.CreateDirectory(root);
                 File.WriteAllText(Path.Combine(root, "settings.json"), System.Text.Json.JsonSerializer.Serialize(preferences));
             }

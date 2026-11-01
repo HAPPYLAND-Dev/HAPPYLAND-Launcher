@@ -27,6 +27,7 @@ public sealed class App : Application
             Source = new Uri("avares://HAPPYLAND.Launcher/Appearance/PixelStyles.axaml")
         });
         PixelTheme.Apply(this, "雾蓝");
+        PixelTypography.Apply(this, "标准");
     }
     public override void OnFrameworkInitializationCompleted()
     {

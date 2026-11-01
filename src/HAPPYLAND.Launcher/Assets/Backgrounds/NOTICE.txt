@@ -1,0 +1,9 @@
+Bundled wallpapers supplied by the project maintainer.
+Source attribution: Wallpaper Alchemy.
+
+forest-path.jpg: Minecraft 4K Wallpaper - Enchanted Forest Path
+forest-garden.jpg: Minecraft 4K Wallpaper - Enchanted Forest Garden
+greenhouse.jpg: Minecraft 4K Wallpaper - Cozy Garden Greenhouse Interior
+alpine-lake.jpg: Minecraft 4K Wallpaper - Alpine Lake Mountain Village
+
+These images are excluded from the project's MIT license.

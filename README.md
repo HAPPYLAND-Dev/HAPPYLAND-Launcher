@@ -4,6 +4,8 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 
 ## 后端
 
+当前后端部署在 `~/Minecraft/Launcher`，固定地址为 `http://port.happylandmc.cc:52130/`，运行于 `launcher` tmux 会话。部署目录的 `Start.sh` 使用内置 .NET 运行时启动后端，生产配置保存在该目录的 `appsettings.Production.json`。
+
 从源码构建需要 .NET 10 SDK。`src/HAPPYLAND.Server/appsettings.json` 是公开示例，复制为同目录的 `appsettings.Production.json` 后填写实际配置。环境配置文件已被 Git 忽略，也可使用 `Publication__Version` 等环境变量覆盖。
 
 ```json
@@ -49,9 +51,9 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 
 ## 启动器
 
-构建解决方案：`dotnet build 'HAPPYLAND Launder.sln'`。运行：`dotnet run --project src/HAPPYLAND.Launcher`。后端地址固定在 `src/HAPPYLAND.Launcher/LauncherDeployment.cs`，当前为 `http://127.0.0.1:5197/`；启动器自动连接。添加账号，选择服务器后下载或启动游戏。Java 由启动器按整合包要求自动管理，不提供地址或路径设置。
+构建解决方案：`dotnet build 'HAPPYLAND Launder.sln'`。运行：`dotnet run --project src/HAPPYLAND.Launcher`。后端地址固定在 `src/HAPPYLAND.Launcher/LauncherDeployment.cs`，当前为 `http://port.happylandmc.cc:52130/`；启动器自动连接。添加账号，选择服务器后下载或启动游戏。Java 由启动器按整合包要求自动管理，不提供地址或路径设置。
 
-界面使用随程序打包的 Fusion Pixel 字体，默认主题为雾蓝，提供八套预设配色、强调色、背景强度、字号和页面动画设置。默认无背景图片；导入自己的图片后可完全按背景取色，也可关闭自动取色使用预设。设置背景后，面板和控件使用半透明配色。首页显示在线人数和所选线路延迟，线路列表分别显示各线路延迟；无法获取的数值显示为横线。首页常驻文本与底部更新公告历史独立。底部还提供后端配置的快捷链接及游戏文件夹入口，左栏底部显示启动器版本。字体许可证见 `src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt`。
+界面使用随程序打包的 Fusion Pixel 字体，默认启用“林间小径”背景并跟随背景取色，提供八套预设配色、强调色、字号、页面动画及 100%、125%、150% 界面缩放。缩放选择自动保存。外观页面提供四张内置壁纸缩略图，右侧“+”可添加自己的图片，每张图分别保存图片强度和暗化程度。可以完全按背景取色，也可关闭自动取色使用主题预设。设置背景后，面板和控件使用半透明配色。首页显示在线人数和所选线路延迟，线路列表分别显示各线路延迟；无法获取的数值显示为横线。首页常驻文本与底部更新公告历史独立。底部还提供后端配置的快捷链接及游戏文件夹入口，左栏底部显示启动器版本。字体许可证见 `src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt`。
 
 游戏选项提供内存滑块和数值输入、窗口大小预设及自定义宽高、全屏、视距、帧率、垂直同步、界面大小、亮度和声音设置，保存后在下一次启动游戏时应用。写入 `options.txt` 时保留其他选项。可记住启动器窗口大小，选择启动页面及启动游戏后是否最小化窗口。维护操作在主窗口内确认：卸载删除 Minecraft 版本、资源、依赖和托管 Java，保留存档、Mod、配置与整合包记录；重装运行库只替换游戏所需的托管 Java，不重下游戏文件。
 
@@ -79,5 +81,7 @@ Windows 使用 ZIP，Linux 和 macOS 使用保留可执行权限的 `tar.gz`。m
 ## 许可证
 
 本项目采用 [MIT License](LICENSE)。`src/Hyperion/` 包含基于 HyperionMinecraftLauncher 修改的核心源码，保留 Tech Tea Studio 的 [MIT 许可证](src/Hyperion/LICENSE.txt)。Fusion Pixel 字体来自 [TakWolf/fusion-pixel-font](https://github.com/TakWolf/fusion-pixel-font)，采用 [SIL Open Font License 1.1](src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt)。NuGet 依赖遵循各自的许可证。
+
+内置背景由维护者提供，署名 Wallpaper Alchemy，包含林间小径、秘境花园、阳光温室和高山湖畔。这些图片不在项目 MIT 许可证范围内，来源说明随发布包附带。
 
 仓库提供启动器和后端源码，Minecraft、Java 运行环境、整合包及 Mod 由程序按配置下载。部署配置、账号缓存、系统凭据、日志、截图和本地验证目录不包含在仓库中。
