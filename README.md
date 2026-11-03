@@ -72,9 +72,9 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-Windows 使用 ZIP，Linux 和 macOS 使用保留可执行权限的 `tar.gz`。macOS 启动器为 `.app`，采用本地临时签名，尚未使用 Apple 开发者证书签名或公证；Windows 包尚未进行 Authenticode 签名。解压后运行启动器即可，包内已附带 .NET 运行时。Linux 桌面仍需要系统图形库和上述 libsecret 服务。
+Windows 使用 ZIP，Linux 和 macOS 使用保留可执行权限的 `tar.gz`。Windows 和 Linux 的启动器各为一个可执行文件；macOS 启动器保留可双击的 `.app`，其中包含一个可执行文件、图标和应用信息。压缩包同时附带说明与许可证。程序已包含 .NET 运行时，首次运行时会将所需的原生组件释放到系统用户缓存，启动器配置和游戏目录的位置不变。macOS 应用采用本地临时签名，尚未使用 Apple 开发者证书签名或公证；Windows 包尚未进行 Authenticode 签名。Linux 桌面仍需要系统图形库和上述 libsecret 服务。
 
-后端包仅包含公开的 `appsettings.json`。部署时在解压目录复制为 `appsettings.Production.json`，填写整合包、账号及服务器配置，然后从该目录运行 `HAPPYLAND.Server`（Windows 为 `HAPPYLAND.Server.exe`）。环境配置文件不会进入发布包。
+后端包包含一个可执行文件、公开的 `appsettings.json` 及说明和许可证。部署时在解压目录复制为 `appsettings.Production.json`，填写整合包、账号及服务器配置，然后从该目录运行 `HAPPYLAND.Server`（Windows 为 `HAPPYLAND.Server.exe`）。环境配置文件不会进入发布包，原有配置文件的位置不变。
 
 本地打包需要 .NET 10 SDK 和 Python 3.11 以上版本，例如 `python scripts/package.py --runtime linux-x64 --version 1.2.3`，输出在 `artifacts/`。macOS `.app` 的打包与签名在 macOS 上执行。
 

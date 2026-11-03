@@ -13,6 +13,7 @@ import struct
 import subprocess
 import tarfile
 import tempfile
+import xml.etree.ElementTree as ET
 import zipfile
 
 
@@ -39,86 +40,66 @@ def publish(project, runtime, version, destination):
     command = [
         "dotnet", "publish", str(ROOT / "src" / project / (project + ".csproj")),
         "--configuration", "Release", "--runtime", runtime, "--self-contained", "true",
-        "--output", str(destination), "-p:PublishTrimmed=false", "-p:PublishSingleFile=false",
+        "--output", str(destination), "-p:PublishTrimmed=false", "-p:PublishSingleFile=true",
+        "-p:IncludeNativeLibrariesForSelfExtract=true",
         "-p:DebugType=none", "-p:DebugSymbols=false", "-p:ContinuousIntegrationBuild=true",
         "-p:Version=" + version,
     ]
+    if project == "HAPPYLAND.Server":
+        command += ["-p:StaticWebAssetsEnabled=false", "-p:PublishIISAssets=false"]
     if os.environ.get("GITHUB_SHA"):
         command.append("-p:SourceRevisionId=" + os.environ["GITHUB_SHA"])
     subprocess.run(command, cwd=ROOT, check=True)
 
+    executable = project + (".exe" if runtime.startswith("win-") else "")
+    expected = {executable, "appsettings.json"} if project == "HAPPYLAND.Server" else {executable}
+    published = {file.relative_to(destination).as_posix() for file in destination.rglob("*") if file.is_file()}
+    if published != expected:
+        raise RuntimeError(f"Unexpected files in {project} publish output: {sorted(published)}")
 
-def add_notices(destination, launcher):
-    notices = destination / "Licenses"
-    notices.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(ROOT / "LICENSE", notices / "HAPPYLAND-MIT.txt")
+
+def add_notices(destination, project, runtime, launcher):
+    notices = [("HAPPYLAND", ROOT / "LICENSE")]
     if launcher:
-        shutil.copy2(ROOT / "src/Hyperion/LICENSE.txt", notices / "Hyperion-MIT.txt")
-        shutil.copy2(ROOT / "src/HAPPYLAND.Launcher/Assets/Avalonia-WebView-MIT.txt", notices / "Avalonia-WebView-MIT.txt")
-        shutil.copy2(ROOT / "src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt", notices / "Fusion-Pixel-OFL.txt")
-        shutil.copy2(ROOT / "src/HAPPYLAND.Launcher/Assets/Backgrounds/NOTICE.txt", notices / "Wallpapers-NOTICE.txt")
-    shutil.copy2(ROOT / "README.md", destination / "README.md")
-
-
-def add_runtime_notices(published, project, runtime):
+        notices += [
+            ("Hyperion", ROOT / "src/Hyperion/LICENSE.txt"),
+            ("Avalonia WebView", ROOT / "src/HAPPYLAND.Launcher/Assets/Avalonia-WebView-MIT.txt"),
+            ("Fusion Pixel", ROOT / "src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt"),
+            ("Wallpapers", ROOT / "src/HAPPYLAND.Launcher/Assets/Backgrounds/NOTICE.txt"),
+        ]
     packages = Path(os.environ.get("NUGET_PACKAGES", Path.home() / ".nuget/packages"))
-    config = json.loads((published / (project + ".runtimeconfig.json")).read_text(encoding="utf-8"))
-    notices = published / "Licenses"
-    notices.mkdir()
+    project_file = ROOT / "src" / project / (project + ".csproj")
+    framework = ET.parse(project_file).findtext("./PropertyGroup/TargetFramework")
+    config_file = ROOT / "src" / project / "bin" / "Release" / framework / runtime / (project + ".runtimeconfig.json")
+    config = json.loads(config_file.read_text(encoding="utf-8"))
     for framework in config["runtimeOptions"]["includedFrameworks"]:
         name = framework["name"]
         package = packages / (name.lower() + ".runtime." + runtime) / framework["version"].lower()
-        for file in package.iterdir():
+        for file in sorted(package.iterdir()):
             if file.name.lower() in {"license.txt", "third-party-notices.txt"}:
-                shutil.copy2(file, notices / (name + "-" + file.name))
+                notices.append((name + " - " + file.name, file))
+    with (destination / "LICENSES.txt").open("w", encoding="utf-8", newline="\n") as output:
+        for title, file in notices:
+            output.write("=== " + title + " ===\n\n")
+            output.write(file.read_text(encoding="utf-8-sig").rstrip() + "\n\n")
+    shutil.copy2(ROOT / "README.md", destination / "README.md")
 
 
-def is_macho(file):
-    if not file.is_file() or file.is_symlink():
-        return False
-    with file.open("rb") as stream:
-        return stream.read(4) in {
-            b"\xcf\xfa\xed\xfe", b"\xfe\xed\xfa\xcf", b"\xce\xfa\xed\xfe", b"\xfe\xed\xfa\xce",
-            b"\xca\xfe\xba\xbe", b"\xbe\xba\xfe\xca", b"\xca\xfe\xba\xbf", b"\xbf\xba\xfe\xca",
-        }
-
-
-def sign_macos(directory, executable, entitlements):
-    for file in sorted(directory.rglob("*"), key=lambda item: (item == executable, str(item))):
-        if not is_macho(file):
-            continue
-        command = ["codesign", "--force", "--sign", "-"]
-        if file == executable:
-            command += ["--entitlements", str(entitlements)]
-        subprocess.run(command + [str(file)], check=True)
+def sign_macos(executable, entitlements):
+    subprocess.run(["codesign", "--force", "--sign", "-", "--entitlements", str(entitlements), str(executable)], check=True)
     subprocess.run(["codesign", "--verify", "--strict", str(executable)], check=True)
 
 
-def mac_bundle(published, workspace, version, entitlements):
+def mac_bundle(published, workspace, runtime, version, entitlements):
     bundle = workspace / "HAPPYLAND Launcher.app"
     contents = bundle / "Contents"
     contents.mkdir(parents=True)
-    shutil.move(str(published), contents / "MacOS")
+    macos = contents / "MacOS"
+    macos.mkdir()
+    executable = macos / "HAPPYLAND.Launcher"
+    shutil.move(str(published / "HAPPYLAND.Launcher"), executable)
     resources = contents / "Resources"
     resources.mkdir()
-    frameworks = contents / "Frameworks"
-    frameworks.mkdir()
-    managed = resources / "app"
-    managed.mkdir()
-    # Keep code and resources in their bundle locations while preserving .NET lookup paths.
-    for file in list((contents / "MacOS").iterdir()):
-        if file.name == "HAPPYLAND.Launcher":
-            continue
-        if file.name == "Licenses":
-            target = resources / file.name
-        elif is_macho(file):
-            if file.suffix != ".dylib":
-                continue
-            target = frameworks / file.name
-        else:
-            target = managed / file.name
-        shutil.move(str(file), target)
-        file.symlink_to(os.path.relpath(target, file.parent), target_is_directory=target.is_dir())
     png = (ROOT / "src/HAPPYLAND.Launcher/Assets/server-icon.png").read_bytes()
     # Preserve the original 64-pixel icon in standard and Retina ICNS entries.
     entries = b"".join(kind + struct.pack(">I", len(png) + 8) + png for kind in (b"icp6", b"ic11"))
@@ -135,8 +116,8 @@ def mac_bundle(published, workspace, version, entitlements):
             "CFBundleIconFile": "AppIcon.icns",
             "NSHighResolutionCapable": True,
         }, output)
-    add_notices(resources, launcher=True)
-    sign_macos(contents, contents / "MacOS/HAPPYLAND.Launcher", entitlements)
+    add_notices(resources, "HAPPYLAND.Launcher", runtime, launcher=True)
+    sign_macos(executable, entitlements)
     subprocess.run(["codesign", "--force", "--sign", "-", "--entitlements", str(entitlements), str(bundle)], check=True)
     subprocess.run(["codesign", "--verify", "--deep", "--strict", str(bundle)], check=True)
     return bundle
@@ -175,13 +156,12 @@ def main():
             name = f"HAPPYLAND-{kind}-{version}-{args.runtime}"
             published = workspace / name
             publish(project, args.runtime, version, published)
-            add_runtime_notices(published, project, args.runtime)
             if kind == "Launcher" and args.runtime.startswith("osx-"):
-                published = mac_bundle(published, workspace, version, entitlements)
+                published = mac_bundle(published, workspace, args.runtime, version, entitlements)
             else:
-                add_notices(published, launcher=kind == "Launcher")
+                add_notices(published, project, args.runtime, launcher=kind == "Launcher")
                 if args.runtime.startswith("osx-"):
-                    sign_macos(published, published / project, entitlements)
+                    sign_macos(published / project, entitlements)
             archives.append(archive(published, output, name, windows=args.runtime.startswith("win-")))
     with (output / f"SHA256SUMS-{args.runtime}.txt").open("w", encoding="utf-8", newline="\n") as sums:
         for file in sorted(archives):

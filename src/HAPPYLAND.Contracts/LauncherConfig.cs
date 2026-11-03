@@ -6,6 +6,9 @@ public sealed record LauncherConfig(string PackVersion, string PackUrl, long Pac
 public sealed record GameServer(string Id, string Name, string Host, int Port = 25565,
     IReadOnlyList<ServerRoute>? Routes = null)
 {
+    // Configuration binding represents an empty Routes array as an empty scalar.
+    public GameServer() : this("", "", "") { }
+
     public IEnumerable<ServerRoute> GetRoutes() =>
         new[] { new ServerRoute("main", "主线路", Host, Port) }.Concat(Routes ?? []);
 }
