@@ -63,7 +63,6 @@ def add_notices(destination, project, runtime, launcher):
     if launcher:
         notices += [
             ("Hyperion", ROOT / "src/Hyperion/LICENSE.txt"),
-            ("Avalonia WebView", ROOT / "src/HAPPYLAND.Launcher/Assets/Avalonia-WebView-MIT.txt"),
             ("Fusion Pixel", ROOT / "src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt"),
             ("Wallpapers", ROOT / "src/HAPPYLAND.Launcher/Assets/Backgrounds/NOTICE.txt"),
         ]

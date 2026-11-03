@@ -14,9 +14,6 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args is [MicrosoftLoginBrowser.Argument, var root])
-            return MicrosoftLoginBrowser.Run(root);
-
         // Avalonia's GTK initialization changes these for the launcher process.
         if (OperatingSystem.IsLinux())
             GameDisplayEnvironment = new Dictionary<string, string?>

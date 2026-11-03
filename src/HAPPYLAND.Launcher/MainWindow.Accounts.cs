@@ -18,13 +18,13 @@ public sealed partial class MainWindow
         microsoftLoginView?.ShowCode(info);
     }
 
-    private MicrosoftLoginView CreateMicrosoftLogin() => new(root, async code =>
+    private MicrosoftLoginView CreateMicrosoftLogin() => new(async code =>
         {
             try { await Clipboard!.SetTextAsync(code); toast.Show("验证码已复制"); }
             catch (Exception e) { logger.Error("Could not copy the verification code", e); SetStatus("复制失败，请重试。", true, e.ToString()); }
         }, url =>
         {
-            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose(); }
             catch (Exception e) { logger.Error("Could not open the Microsoft login page", e); SetStatus("登录页面无法打开。", true, e.ToString()); }
         });
 
