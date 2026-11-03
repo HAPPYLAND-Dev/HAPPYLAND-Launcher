@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
@@ -191,10 +192,11 @@ public sealed partial class MainWindow
                 new StackPanel { Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, Children = { new PixelIcon { Kind = icon, Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Center }, Label(text, "small") } } };
             button.Click += (_, _) => ShowPage(key); navigation[key] = button; buttons.Children.Add(button);
         }
-        var version = GetType().Assembly.GetName().Version!.ToString(3);
+        var version = GetType().Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Split('+')[0];
         var label = Label("v" + version, "small", "muted");
-        label.TextTrimming = TextTrimming.CharacterEllipsis;
-        label.HorizontalAlignment = HorizontalAlignment.Center; label.Margin = new Thickness(8, 0, 8, 12);
+        label.TextWrapping = TextWrapping.Wrap;
+        label.TextAlignment = TextAlignment.Center;
+        label.HorizontalAlignment = HorizontalAlignment.Stretch; label.Margin = new Thickness(8, 0, 8, 12);
         var layout = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Children = { buttons, label } };
         Grid.SetRow(label, 1);
         var border = new Border { Child = layout, BorderThickness = new Thickness(0, 0, 1, 0) };

@@ -65,7 +65,7 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 
 推送 `main`、向 `main` 提交 Pull Request，或在 [Actions](https://github.com/HAPPYLAND-Dev/HAPPYLAND-Launcher/actions/workflows/build-release.yml) 手动运行工作流，会构建 Windows x64、Linux x64、macOS Intel 和 macOS Apple Silicon。每个平台分别打包启动器和后端，压缩包及 SHA-256 校验文件可从该次运行的 Artifacts 下载，保留 7 天。
 
-推送 `v1.2.3` 这样的版本 tag 后，全部平台构建成功才会创建并公开 GitHub Release，附带八个压缩包、`SHA256SUMS.txt` 和自动生成的发布说明。`v1.2.3-rc.1` 这样的 tag 会发布为预发布版本。tag 中的版本号写入程序；普通 CI 构建使用 `0.0.0-ci.<运行序号>`。上传失败时 Release 保持草稿，重新运行工作流可继续上传。
+推送 `v1.2.3` 这样的版本 tag 后，全部平台构建成功才会创建并公开 GitHub Release，附带八个压缩包、`SHA256SUMS.txt` 和自动生成的发布说明。`v1.2.3-rc.1` 这样的 tag 会发布为预发布版本。tag 中的版本号写入程序；普通 CI 构建使用 `0.0.1-ci.<运行序号>`。上传失败时 Release 保持草稿，重新运行工作流可继续上传。
 
 ```sh
 git tag v1.2.3

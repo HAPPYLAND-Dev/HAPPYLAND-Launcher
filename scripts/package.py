@@ -29,7 +29,7 @@ def build_version(explicit):
             raise ValueError("Release tags must start with v, for example v1.2.3.")
         version = tag[1:]
     else:
-        version = "0.0.0-ci." + os.environ.get("GITHUB_RUN_NUMBER", "0")
+        version = "0.0.1-ci." + os.environ.get("GITHUB_RUN_NUMBER", "0")
     if VERSION.fullmatch(version) is None:
         raise ValueError("Expected a version such as 1.2.3 or 1.2.3-rc.1.")
     return version
