@@ -1,9 +1,7 @@
 namespace TechTeaStudio.HyperionMinecraftLauncher.Core.Auth;
 
 /// <summary>
-/// Surfaced from <see cref="IMicrosoftAuthService"/> when sign-in falls into the OAuth
-/// device-code branch (no embedded WebView available). The view-model shows the user
-/// the <see cref="Message"/> + opens <see cref="VerificationUrl"/> in the default browser.
+/// Surfaced from <see cref="IMicrosoftAuthService"/> when sign-in requires device-code verification.
 /// </summary>
 public sealed record MicrosoftDeviceCodeInfo
 {

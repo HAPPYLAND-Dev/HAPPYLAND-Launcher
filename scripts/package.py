@@ -54,6 +54,7 @@ def add_notices(destination, launcher):
     shutil.copy2(ROOT / "LICENSE", notices / "HAPPYLAND-MIT.txt")
     if launcher:
         shutil.copy2(ROOT / "src/Hyperion/LICENSE.txt", notices / "Hyperion-MIT.txt")
+        shutil.copy2(ROOT / "src/HAPPYLAND.Launcher/Assets/Avalonia-WebView-MIT.txt", notices / "Avalonia-WebView-MIT.txt")
         shutil.copy2(ROOT / "src/HAPPYLAND.Launcher/Assets/Fonts/LICENSE-OFL.txt", notices / "Fusion-Pixel-OFL.txt")
         shutil.copy2(ROOT / "src/HAPPYLAND.Launcher/Assets/Backgrounds/NOTICE.txt", notices / "Wallpapers-NOTICE.txt")
     shutil.copy2(ROOT / "README.md", destination / "README.md")

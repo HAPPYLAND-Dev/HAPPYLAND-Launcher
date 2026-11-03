@@ -39,7 +39,9 @@ Thumbs.db
 *.jks
 *.keystore
 **/accounts*.json
+**/account-list.json
 **/skin-accounts.json
+**/webview/
 **/settings.json
 **/installed-pack.json
 **/prepared.json

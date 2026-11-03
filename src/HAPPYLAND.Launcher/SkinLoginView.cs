@@ -17,6 +17,8 @@ public sealed class SkinLoginView : UserControl
     {
         user.Text = username;
         var sites = new ComboBox { ItemsSource = skinServers.Select(s => s.Name).ToArray(), SelectedIndex = 0, HorizontalAlignment = HorizontalAlignment.Stretch };
+        var website = new Button { Content = "皮肤站官网", Classes = { "quiet" }, HorizontalAlignment = HorizontalAlignment.Right };
+        website.Click += async (_, _) => await SiteRequested!(skinServers[sites.SelectedIndex]);
         var submit = new Button { Content = "登录", IsDefault = true, HorizontalAlignment = HorizontalAlignment.Stretch, Classes = { "primary" } };
         var cancel = new Button { Content = "取消", IsCancel = true, HorizontalAlignment = HorizontalAlignment.Stretch };
         cancel.Click += (_, _) => Cancel();
@@ -29,9 +31,12 @@ public sealed class SkinLoginView : UserControl
         };
         var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,*"), Children = { cancel, submit } };
         Grid.SetColumn(submit, 2);
+        var siteHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children =
+            { new TextBlock { Text = "皮肤站", Classes = { "muted" }, VerticalAlignment = VerticalAlignment.Center }, website } };
+        Grid.SetColumn(website, 1);
         Content = new StackPanel { Margin = new Thickness(16), Spacing = 8, Children =
         {
-            new TextBlock { Text = "皮肤站", Classes = { "muted" } }, sites,
+            siteHeader, sites,
             new TextBlock { Text = "账号", Classes = { "muted" } }, user,
             new TextBlock { Text = "密码", Classes = { "muted" } }, pass,
             buttons
@@ -40,6 +45,7 @@ public sealed class SkinLoginView : UserControl
 
     public Task<SkinLogin?> Result => completion.Task;
     public event Action<string>? ValidationError;
+    public event Func<SkinServer, Task>? SiteRequested;
 
     public void Cancel() => completion.TrySetResult(null);
 

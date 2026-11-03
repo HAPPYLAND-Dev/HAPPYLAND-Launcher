@@ -63,6 +63,7 @@ public sealed partial class MainWindow : Window
     private readonly List<Control> editingControls = [];
     private readonly MenuItem addMicrosoft = new() { Header = "添加微软账号" };
     private readonly MenuItem addSkin = new() { Header = "添加皮肤站账号" };
+    private readonly MenuItem removeAccount = new() { Header = "删除当前账号" };
     private Control homePage = null!, modsPage = null!, settingsPage = null!, gameSettingsPage = null!;
     private Settings preferences = new(BackgroundPresetId: "forest-path", LogicalWindowSize: true);
     private MicrosoftAuthService? microsoft;
@@ -192,10 +193,11 @@ public sealed partial class MainWindow : Window
         action.Click += async (_, _) => await ExecuteAsync(PrimaryAsync);
         uninstall.Click += async (_, _) => await ExecuteAsync(UninstallGameAsync, "游戏未能卸载，请重试。");
         reinstallJava.Click += async (_, _) => await ExecuteAsync(ReinstallJavaAsync, "运行库未能重装，请重试。");
-        var accountMenu = new MenuFlyout { ItemsSource = new[] { addMicrosoft, addSkin } };
+        var accountMenu = new MenuFlyout { ItemsSource = new object[] { addMicrosoft, addSkin, new Separator(), removeAccount } };
         addAccount.Flyout = accountMenu;
         addMicrosoft.Click += async (_, _) => await ExecuteAsync(AddMicrosoftAsync, "登录失败，请重试。");
         addSkin.Click += async (_, _) => await ExecuteAsync(AddSkinAsync, "登录失败，请重试。");
+        removeAccount.Click += async (_, _) => await ExecuteAsync(RemoveAccountAsync, "账号未能删除，请重试。");
         servers.SelectionChanged += async (_, _) =>
         {
             if (updatingServers) return;
@@ -269,6 +271,7 @@ public sealed partial class MainWindow : Window
         var hasAccount = accounts.SelectedItem is LauncherAccount;
         actionText.Text = hasAccount ? primaryActionLabel : "请添加账号";
         action.IsEnabled = hasAccount && !busy && !gameRunning;
+        removeAccount.IsEnabled = hasAccount && !busy;
     }
 
     private void SetStatus(string message, bool error = false, string? details = null) => toast.Show(message, error, detail: details);
@@ -339,7 +342,7 @@ public sealed partial class MainWindow : Window
             var cache = Path.Combine(root, "accounts.json");
             var store = new FileAccountStore(Path.Combine(root, "account-list.json"), cache);
             microsoft = new MicrosoftAuthService(new SerilogLauncherLogger(Path.Combine(root, "logs")), cache, store, microsoftClientId);
-            microsoft.DeviceCodeRequested += (_, e) => Dispatcher.UIThread.Post(() => toast.Show($"请访问 {e.VerificationUrl}\n输入代码：{e.UserCode}", persistent: true));
+            microsoft.DeviceCodeRequested += (_, e) => Dispatcher.UIThread.Post(() => ShowMicrosoftLogin(e));
             foreach (var account in await microsoft.ListCachedAsync(lifetime.Token))
                 accountList.Add(new LauncherAccount(account.Username, account.Id, null, null, null, account.Uuid));
         }
@@ -348,8 +351,29 @@ public sealed partial class MainWindow : Window
 
     private async Task AddMicrosoftAsync()
     {
-        toast.Show("正在登录微软账号", persistent: true);
-        var session = await microsoft!.SignInInteractiveAsync(lifetime.Token);
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        microsoftLoginCancellation = cancellation;
+        var view = CreateMicrosoftLogin();
+        microsoftLoginView = view;
+        void Cancel() { cancellation.Cancel(); view.Close(); }
+        microsoftLoginOverlay = ShowOverlayAsync(view, "微软登录", Cancel, view.Result, view.FocusFirstField, scrollContent: false, width: 520, headerContent: view.CodeHeader);
+        AuthResult session;
+        try
+        {
+            session = await microsoft!.SignInInteractiveAsync(cancellation.Token);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested && !lifetime.IsCancellationRequested)
+        {
+            return;
+        }
+        finally
+        {
+            microsoftLoginView?.Close();
+            if (microsoftLoginOverlay is not null) await microsoftLoginOverlay;
+            microsoftLoginView = null;
+            microsoftLoginOverlay = null;
+            microsoftLoginCancellation = null;
+        }
         var account = (await microsoft.ListCachedAsync(lifetime.Token)).First(a => a.Uuid == session.Uuid);
         ReplaceAccount(new LauncherAccount(session.Username, account.Id, null, null, null, session.Uuid));
         SetStatus("微软账号已添加"); await SavePreferencesAsync();
@@ -524,10 +548,14 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void SaveSkinAccounts()
+    private void SaveSkinAccounts(LauncherAccount? excluding = null)
     {
-        var saved = accountList.Where(a => a.SkinServer is not null && a.Login is not null).Select(a => new SavedSkinAccount(a.Name, a.SkinServer!, a.Login!, a.Uuid)).ToArray();
-        Directory.CreateDirectory(root); File.WriteAllText(Path.Combine(root, "skin-accounts.json"), JsonSerializer.Serialize(saved));
+        var saved = accountList.Where(a => !ReferenceEquals(a, excluding) && a.SkinServer is not null && a.Login is not null).Select(a => new SavedSkinAccount(a.Name, a.SkinServer!, a.Login!, a.Uuid)).ToArray();
+        Directory.CreateDirectory(root);
+        var path = Path.Combine(root, "skin-accounts.json");
+        var staged = path + ".tmp";
+        File.WriteAllText(staged, JsonSerializer.Serialize(saved));
+        File.Move(staged, path, overwrite: true);
     }
 
     private void RefreshMods()

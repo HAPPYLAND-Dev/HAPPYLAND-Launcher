@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -25,12 +24,8 @@ namespace TechTeaStudio.HyperionMinecraftLauncher.App.Auth;
 ///   * The default XboxAuthNet OAuth flow tries to host a WebView2 instance, which has no
 ///     binding into Avalonia and crashes with <c>"Current platform does not support to
 ///     provide default WebUI."</c> on first sign-in.
-///   * The MSAL device-code flow needs zero platform integration: Microsoft hands us a
-///     short user-code, we show it to the user (event + log) and open the verification URL
-///     in their default browser. MSAL polls in the background until they enter the code.
-///
-/// MSAL's own token cache lives in <c>%LOCALAPPDATA%\.IdentityService\</c>, so silent sign-in
-/// on subsequent launches uses the cached refresh token and skips the device-code prompt.
+///   * The MSAL device-code flow reports a short user-code and verification URL to the UI.
+///     MSAL polls in the background while the user completes verification.
 ///
 /// Multi-account roster (v0.27.0+): the service also fronts an <see cref="IAccountStore"/>
 /// that mirrors the XboxAuthNet account manager into our neutral <see cref="Account"/> DTO
@@ -82,7 +77,7 @@ public sealed class MicrosoftAuthService : IMicrosoftAuthService
                 VerificationUrl = deviceCode.VerificationUrl ?? "https://microsoft.com/devicelogin",
                 Message = deviceCode.Message ?? string.Empty,
             };
-            _logger.Info($"Microsoft device-code: {info.UserCode} @ {info.VerificationUrl}");
+            _logger.Info("Microsoft device-code verification requested.");
 
             try
             {
@@ -91,17 +86,6 @@ public sealed class MicrosoftAuthService : IMicrosoftAuthService
             catch (Exception ex)
             {
                 _logger.Warn($"DeviceCodeRequested subscriber threw: {ex.Message}");
-            }
-
-            // Open the verification page in the default browser. Best-effort; missing browser is fine
-            // - the user can also type the URL themselves from the log message.
-            try
-            {
-                Process.Start(new ProcessStartInfo(info.VerificationUrl) { UseShellExecute = true });
-            }
-            catch (Exception ex)
-            {
-                _logger.Warn($"Could not auto-open browser to {info.VerificationUrl}: {ex.Message}");
             }
 
             return Task.CompletedTask;
@@ -293,15 +277,8 @@ public sealed class MicrosoftAuthService : IMicrosoftAuthService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
         _logger.Info($"Microsoft sign-out (account '{accountId}').");
-        try
-        {
-            if (TryFindAccount(accountId, out var xboxAccount))
-                await _handler.Signout(xboxAccount!, cancellationToken).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.Warn($"Microsoft sign-out for '{accountId}' failed: {ex.Message}");
-        }
+        if (_handler.AccountManager.GetAccounts().TryGetAccount(accountId, out var xboxAccount))
+            await _handler.Signout(xboxAccount!, cancellationToken).ConfigureAwait(false);
         await _accountStore.RemoveAsync(accountId, cancellationToken).ConfigureAwait(false);
     }
 

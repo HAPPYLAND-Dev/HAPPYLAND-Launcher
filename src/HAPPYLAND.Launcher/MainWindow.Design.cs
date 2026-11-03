@@ -88,10 +88,12 @@ public sealed partial class MainWindow
         accounts.ItemTemplate = new FuncDataTemplate<LauncherAccount>((account, _) =>
         {
             if (account is null) return null;
-            var face = new SkinHeadView { Width = 16, Height = 16, VerticalAlignment = VerticalAlignment.Center };
+            var face = new SkinHeadView { Width = 16, Height = 16, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
             face.Bind(SkinHeadView.SkinProperty, new Binding(nameof(LauncherAccount.Skin)));
+            var badge = new LoginMethodBadge { IsMicrosoft = account.MicrosoftId is not null, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Bottom };
+            var avatar = new Grid { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, Children = { face, badge } };
             var name = new TextBlock { Text = account.Name, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-            var item = new Grid { ColumnDefinitions = new ColumnDefinitions("16,8,*"), Children = { face, name } };
+            var item = new Grid { ColumnDefinitions = new ColumnDefinitions("18,8,*"), Children = { avatar, name } };
             Grid.SetColumn(name, 2);
             ToolTip.SetTip(item, account.Name + "\n" + account.Provider);
             return item;
@@ -101,7 +103,7 @@ public sealed partial class MainWindow
         action.Content = actionText;
         var accountRow = new Grid { Height = 36, ColumnDefinitions = new ColumnDefinitions("*,6,28"), Children = { accounts, addAccount } };
         Grid.SetColumn(addAccount, 2);
-        ToolTip.SetTip(addAccount, "添加账号");
+        ToolTip.SetTip(addAccount, "管理账号");
         var launchPanel = new StackPanel { Spacing = 9, Children =
         {
             Label("使用账号", "small", "muted"), accountRow, action,
