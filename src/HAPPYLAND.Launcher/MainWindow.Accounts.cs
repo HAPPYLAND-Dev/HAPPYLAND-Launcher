@@ -18,7 +18,7 @@ public sealed partial class MainWindow
         microsoftLoginView?.ShowCode(info);
     }
 
-    private MicrosoftLoginView CreateMicrosoftLogin() => new(root, () => interfaceScale, async code =>
+    private MicrosoftLoginView CreateMicrosoftLogin() => new(root, async code =>
         {
             try { await Clipboard!.SetTextAsync(code); toast.Show("验证码已复制"); }
             catch (Exception e) { logger.Error("Could not copy the verification code", e); SetStatus("复制失败，请重试。", true, e.ToString()); }

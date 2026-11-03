@@ -12,8 +12,11 @@ internal static class Program
     public static IReadOnlyDictionary<string, string?> GameDisplayEnvironment { get; private set; } = new Dictionary<string, string?>();
 
     [STAThread]
-    public static void Main(string[] args)
+    public static int Main(string[] args)
     {
+        if (args is [MicrosoftLoginBrowser.Argument, var root])
+            return MicrosoftLoginBrowser.Run(root);
+
         // Avalonia's GTK initialization changes these for the launcher process.
         if (OperatingSystem.IsLinux())
             GameDisplayEnvironment = new Dictionary<string, string?>
@@ -21,7 +24,7 @@ internal static class Program
                 ["WAYLAND_DISPLAY"] = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"),
                 ["GDK_BACKEND"] = Environment.GetEnvironmentVariable("GDK_BACKEND")
             };
-        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect()
         .With(new Win32PlatformOptions { OverlayPopups = true })
