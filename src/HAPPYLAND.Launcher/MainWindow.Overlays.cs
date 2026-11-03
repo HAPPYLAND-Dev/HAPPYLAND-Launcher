@@ -17,7 +17,7 @@ public sealed partial class MainWindow
     private Action? focusOverlay;
     private Control? restoreOverlayFocus;
 
-    private async Task<T> ShowOverlayAsync<T>(Control content, string title, Action cancel, Task<T> result, Action focus, bool scrollContent = true, double width = 380, Control? headerContent = null)
+    private async Task<T> ShowOverlayAsync<T>(Control content, string title, Action cancel, Task<T> result, Action focus, bool scrollContent = true)
     {
         using var cancellation = lifetime.Token.Register(cancel);
         var previousFocus = FocusManager?.GetFocusedElement();
@@ -30,16 +30,15 @@ public sealed partial class MainWindow
             Content = new PixelIcon { Kind = PixelIconKind.Close, Width = 12, Height = 12 }, Classes = { "quiet" } };
         close.Click += (_, _) => cancel();
         Avalonia.Automation.AutomationProperties.SetName(close, "关闭");
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(12, 4, 6, 4),
+        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(12, 4, 6, 4),
             Children = { new TextBlock { Text = title, VerticalAlignment = VerticalAlignment.Center }, close } };
-        Grid.SetColumn(close, 2);
-        if (headerContent is not null) { Grid.SetColumn(headerContent, 1); header.Children.Add(headerContent); }
+        Grid.SetColumn(close, 1);
         Control body = scrollContent ? new ScrollViewer { Content = content, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled } : content;
         var originalMaxHeight = content.MaxHeight;
         var panel = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Children = { header, body } };
         Grid.SetRow(body, 1);
         KeyboardNavigation.SetTabNavigation(panel, KeyboardNavigationMode.Cycle);
-        var frame = new PixelWindowChrome { Child = panel, Width = width, Margin = new Thickness(16), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var frame = new PixelWindowChrome { Child = panel, Width = 380, Margin = new Thickness(16), HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         frame.Bind(PixelWindowChrome.BackgroundProperty, this.GetResourceObservable("PixelPanel"));
         frame.Bind(PixelWindowChrome.BorderBrushProperty, this.GetResourceObservable("PixelBorder"));
         void FitPanel()

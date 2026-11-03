@@ -356,7 +356,8 @@ public sealed partial class MainWindow : Window
         var view = CreateMicrosoftLogin();
         microsoftLoginView = view;
         void Cancel() { cancellation.Cancel(); view.Close(); }
-        microsoftLoginOverlay = ShowOverlayAsync(view, "微软登录", Cancel, view.Result, view.FocusFirstField, scrollContent: false, width: 520, headerContent: view.CodeHeader);
+        view.CancelRequested += Cancel;
+        microsoftLoginOverlay = ShowOverlayAsync(view, "添加微软账号", Cancel, view.Result, view.FocusFirstField);
         AuthResult session;
         try
         {
