@@ -35,6 +35,9 @@ public sealed record LaunchRequest
 
     public IReadOnlyList<string> ExtraJvmArguments { get; init; } = Array.Empty<string>();
 
+    /// <summary>Environment overrides for the game process; null removes a variable.</summary>
+    public IReadOnlyDictionary<string, string?> EnvironmentVariables { get; init; } = new Dictionary<string, string?>();
+
     /// <summary>Game window width override. <c>null</c> = let Minecraft decide.</summary>
     public int? ScreenWidth { get; init; }
 

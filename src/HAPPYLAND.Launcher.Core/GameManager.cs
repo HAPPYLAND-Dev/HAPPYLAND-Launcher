@@ -27,9 +27,11 @@ public sealed class GameManager
     private readonly string javaDirectory;
     private readonly string markerPath;
     private readonly string uninstalledPath;
+    private readonly IReadOnlyDictionary<string, string?> gameEnvironment;
 
-    public GameManager(string root)
+    public GameManager(string root, IReadOnlyDictionary<string, string?> gameEnvironment)
     {
+        this.gameEnvironment = gameEnvironment;
         gameDirectory = Path.Combine(root, "game");
         javaDirectory = Path.Combine(root, "java");
         http = new HttpClient(new MinecraftMirrorHandler()) { Timeout = TimeSpan.FromMinutes(3) };
@@ -191,6 +193,7 @@ public sealed class GameManager
         var startup = new GameStartupSignal();
         var launched = await underlying.StartProcessAsync(new LaunchRequest { VersionName = version, Session = account,
             GameDirectory = instance.GameDirectory, JavaPath = javaPath, QuickPlay = new QuickPlay.Multiplayer(host, port), ExtraJvmArguments = extraJvmArgs,
+            EnvironmentVariables = gameEnvironment,
             GameLogObserver = startup,
             MaximumRamMb = preferences?.MaximumMemoryMb, MinimumRamMb = preferences is null ? null : 512,
             ScreenWidth = preferences?.Width, ScreenHeight = preferences?.Height, FullScreen = preferences?.FullScreen ?? false }, true, ct);

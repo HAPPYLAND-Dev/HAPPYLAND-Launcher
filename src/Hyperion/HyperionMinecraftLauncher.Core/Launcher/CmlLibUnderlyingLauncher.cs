@@ -204,6 +204,12 @@ public sealed class CmlLibUnderlyingLauncher : IUnderlyingLauncher
 
         var process = await _launcher.BuildProcessAsync(request.VersionName, options, cancellationToken).ConfigureAwait(false);
 
+        foreach (var (name, value) in request.EnvironmentVariables)
+        {
+            if (value is null) process.StartInfo.Environment.Remove(name);
+            else process.StartInfo.Environment[name] = value;
+        }
+
         // Game-log capture (T-stdout-pipe, v0.32.1): only wire stdout/stderr redirection when the
         // caller asked for it. Production launches with ShowGameLog=false keep the default
         // shell-attached pipes (no per-line cost, child writes straight to the parent terminal

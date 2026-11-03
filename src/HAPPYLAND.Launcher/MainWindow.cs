@@ -94,7 +94,7 @@ public sealed partial class MainWindow : Window
         root = Environment.GetEnvironmentVariable("HAPPYLAND_DATA_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "HAPPYLAND");
         logger = new SerilogLauncherLogger(Path.Combine(root, "logs"));
         packs = new PackManager(root, http);
-        game = new GameManager(root);
+        game = new GameManager(root, Program.GameDisplayEnvironment);
         skins = new PlayerSkinService(skinHttp, Path.Combine(root, "skin-cache"));
         skinCredentials = new SkinCredentialStore(root);
         LoadPreferences();

@@ -9,8 +9,20 @@ namespace Happyland.Launcher;
 
 internal static class Program
 {
+    public static IReadOnlyDictionary<string, string?> GameDisplayEnvironment { get; private set; } = new Dictionary<string, string?>();
+
     [STAThread]
-    public static void Main(string[] args) => BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    public static void Main(string[] args)
+    {
+        // Avalonia's GTK initialization changes these for the launcher process.
+        if (OperatingSystem.IsLinux())
+            GameDisplayEnvironment = new Dictionary<string, string?>
+            {
+                ["WAYLAND_DISPLAY"] = Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"),
+                ["GDK_BACKEND"] = Environment.GetEnvironmentVariable("GDK_BACKEND")
+            };
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect()
         .With(new Win32PlatformOptions { OverlayPopups = true })
         .With(new X11PlatformOptions { OverlayPopups = true })
