@@ -14,7 +14,7 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
     "PublicBaseUrl": "https://launcher.example.com/",
     "Version": "2026-01",
     "MrpackPath": "/srv/happyland/current.mrpack",
-    "MicrosoftClientId": "微软应用客户端 ID",
+    "MicrosoftClientId": "499c8d36-be2a-4231-9ebd-ef291b7bb64c",
     "Servers": [
       {
         "Id": "main", "Name": "HAPPYLAND", "Host": "play.example.com", "Port": 25565,
