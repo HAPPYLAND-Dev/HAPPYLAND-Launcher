@@ -17,7 +17,8 @@ public sealed partial class MainWindow
     private Action? focusOverlay;
     private Control? restoreOverlayFocus;
 
-    private async Task<T> ShowOverlayAsync<T>(Control content, string title, Action cancel, Task<T> result, Action focus, bool scrollContent = true)
+    private async Task<T> ShowOverlayAsync<T>(Control content, string title, Action cancel, Task<T> result, Action focus,
+        bool scrollContent = true, bool allowDismiss = true)
     {
         using var cancellation = lifetime.Token.Register(cancel);
         var previousFocus = FocusManager?.GetFocusedElement();
@@ -27,6 +28,7 @@ public sealed partial class MainWindow
         cancelOverlay = cancel;
         focusOverlay = focus;
         var close = new Button { Width = 24, Height = 24, MinHeight = 0, Padding = new Thickness(0),
+            IsVisible = allowDismiss,
             Content = new PixelIcon { Kind = PixelIconKind.Close, Width = 12, Height = 12 }, Classes = { "quiet" } };
         close.Click += (_, _) => cancel();
         Avalonia.Automation.AutomationProperties.SetName(close, "关闭");
@@ -50,7 +52,11 @@ public sealed partial class MainWindow
         void OnSizeChanged(object? sender, SizeChangedEventArgs e) => FitPanel();
         void OnKeyDown(object? sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Escape) { cancel(); e.Handled = true; }
+            if (e.Key == Key.Escape)
+            {
+                if (allowDismiss) cancel();
+                e.Handled = true;
+            }
         }
         var layer = new Grid { Children = { new Border { Background = new SolidColorBrush(Color.FromArgb(150, 0, 0, 0)) }, frame } };
         if (previousLayer is not null) previousLayer.IsEnabled = false;

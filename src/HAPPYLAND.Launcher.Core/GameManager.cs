@@ -7,6 +7,7 @@ using CmlLib.Core.VersionMetadata;
 using System.Globalization;
 using System.Text.Json;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Auth;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Installations.Loaders;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Java;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Launcher;
@@ -36,6 +37,7 @@ public sealed class GameManager
         javaDirectory = Path.Combine(root, "java");
         http = new HttpClient(new MinecraftMirrorHandler()) { Timeout = TimeSpan.FromMinutes(3) };
         var parameters = MinecraftLauncherParameters.CreateDefault(new MinecraftPath(gameDirectory), http);
+        parameters.GameInstaller = new AdaptiveGameInstaller(http);
         versionLoader = new LaunchVersionLoader(parameters.VersionLoader!, new LocalJsonVersionLoader(parameters.MinecraftPath!));
         parameters.VersionLoader = versionLoader;
         var extractors = parameters.FileExtractors!;

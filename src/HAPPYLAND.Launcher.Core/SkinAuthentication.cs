@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Auth;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 
 namespace Happyland.Launcher.Core;
 
@@ -52,12 +53,9 @@ public static class SkinAuthentication
             var cachedHash = Convert.ToHexString(await SHA256.HashDataAsync(cached, ct));
             if (string.Equals(cachedHash, hash, StringComparison.OrdinalIgnoreCase)) return path;
         }
-        {
-            var data = await http.GetByteArrayAsync(info.GetProperty("download_url").GetString()!, ct);
-            if (!string.Equals(Convert.ToHexString(SHA256.HashData(data)), hash, StringComparison.OrdinalIgnoreCase))
-                throw new InvalidDataException("authlib-injector 校验失败。");
-            await File.WriteAllBytesAsync(path, data, ct);
-        }
+        await new AdaptiveDownloader(http).DownloadAsync(
+            new DownloadFile(info.GetProperty("download_url").GetString()!, path, Hash: hash, HashAlgorithm: HashAlgorithmName.SHA256),
+            cancellationToken: ct);
         return path;
     }
 }

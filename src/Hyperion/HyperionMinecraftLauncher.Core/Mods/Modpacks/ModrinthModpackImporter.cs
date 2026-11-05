@@ -4,10 +4,10 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
-using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Installations;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Instances;
 
@@ -33,9 +33,6 @@ public sealed class ModrinthModpackImporter : IModpackImporter
     private const string ManifestEntry = ModpackFormatDetector.ModrinthManifestEntry;
     private const string OverridesPrefix = "overrides/";
     private const string ClientOverridesPrefix = "client-overrides/";
-
-    /// <summary>Concurrent CDN downloads. Modrinth's CDN is fine with a handful; 6 matches browser per-host limits.</summary>
-    private const int MaxParallelDownloads = 6;
 
     private readonly string _instancesRoot;
     private readonly HttpClient _http;
@@ -81,18 +78,14 @@ public sealed class ModrinthModpackImporter : IModpackImporter
             var required = manifest.Files;
             var total = Math.Max(1, manifest.Files.Count);
             var completed = 0;
-            var options = new ParallelOptions
+            var downloads = required.Select(file => new DownloadFile(file.DownloadUrl,
+                ResolveInside(instanceDir, file.TargetPath), file.FileSizeBytes, file.Sha1,
+                Mirrors: file.MirrorUrls)).ToArray();
+            await new AdaptiveDownloader(_http).DownloadAsync(downloads, fileCompleted: (_, _) =>
             {
-                MaxDegreeOfParallelism = MaxParallelDownloads,
-                CancellationToken = cancellationToken,
-            };
-            await Parallel.ForEachAsync(required, options, async (file, token) =>
-            {
-                var dest = ResolveInside(instanceDir, file.TargetPath);
-                Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                await DownloadVerifiedAsync(file, dest, token).ConfigureAwait(false);
                 progress?.Report((double)Interlocked.Increment(ref completed) / total);
-            }).ConfigureAwait(false);
+                return Task.CompletedTask;
+            }, cancellationToken: cancellationToken).ConfigureAwait(false);
 
             // 2) Copy overrides/, then client-overrides/ on top of it (the spec's precedence).
             await using (var fs = File.OpenRead(archivePath))
@@ -292,54 +285,6 @@ public sealed class ModrinthModpackImporter : IModpackImporter
             using var fs = File.Create(dest);
             src.CopyTo(fs);
         }
-    }
-
-    /// <summary>
-    /// Fetch <paramref name="file"/> into <paramref name="destPath"/>, trying the primary URL and
-    /// then each mirror. A download only counts when its sha1 matches the manifest (when given).
-    /// </summary>
-    private async Task DownloadVerifiedAsync(ModpackFile file, string destPath, CancellationToken cancellationToken)
-    {
-        Exception? lastError = null;
-        foreach (var url in file.MirrorUrls.Prepend(file.DownloadUrl))
-        {
-            try
-            {
-                using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-                response.EnsureSuccessStatusCode();
-
-                string actualSha1;
-                await using (var src = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false))
-                await using (var fs = File.Create(destPath))
-                {
-                    using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
-                    var buffer = new byte[81920];
-                    int read;
-                    while ((read = await src.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
-                    {
-                        sha1.AppendData(buffer, 0, read);
-                        await fs.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-                    }
-                    actualSha1 = Convert.ToHexString(sha1.GetHashAndReset());
-                }
-
-                if (string.Equals(actualSha1, file.Sha1, StringComparison.OrdinalIgnoreCase) &&
-                    (file.FileSizeBytes is null || new FileInfo(destPath).Length == file.FileSizeBytes))
-                    return;
-
-                File.Delete(destPath);
-                lastError = new InvalidDataException($"sha1 mismatch from {url} (expected {file.Sha1}, got {actualSha1.ToLowerInvariant()})");
-            }
-            catch (HttpRequestException ex)
-            {
-                lastError = ex;
-            }
-            catch (TaskCanceledException ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                lastError = ex; // HttpClient timeout, not a user cancel - try the next mirror
-            }
-        }
-        throw new InvalidDataException($"Could not download '{file.TargetPath}': {lastError?.Message}", lastError);
     }
 
     /// <summary>

@@ -8,6 +8,9 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using CmlLib.Core;
+using CmlLib.Core.Installers;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 
 namespace TechTeaStudio.HyperionMinecraftLauncher.Core.Java;
 
@@ -208,28 +211,12 @@ public sealed class AdoptiumJavaRuntimeManager : IJavaRuntimeManager
         IProgress<double>? progress,
         CancellationToken cancellationToken)
     {
-        using var response = await _http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
-        var total = response.Content.Headers.ContentLength;
-
-        await using var input = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        await using var output = File.Create(destination);
-
-        var buffer = new byte[81920];
-        long downloaded = 0;
-        int read;
-        while ((read = await input.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        var downloadProgress = progress is null ? null : new SyncProgress<ByteProgress>(value =>
         {
-            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
-            downloaded += read;
-            if (progress is not null && total is long t && t > 0)
-            {
-                // Reserve the 0.95..1.0 band for the extraction step, so the bar fills smoothly
-                // end-to-end rather than hitting 100% before extraction finishes.
-                var frac = Math.Min(0.95, (double)downloaded / t * 0.95);
-                progress.Report(frac);
-            }
-        }
+            if (value.TotalBytes > 0) progress.Report(Math.Min(0.95, value.ToRatio() * 0.95));
+        });
+        await new AdaptiveDownloader(_http).DownloadAsync(new DownloadFile(url, destination),
+            downloadProgress, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ExtractAsync(string archivePath, string targetDir, CancellationToken cancellationToken)

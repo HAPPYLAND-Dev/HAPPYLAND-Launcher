@@ -45,7 +45,23 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 
 `Shortcuts` 控制游玩页底部链接按钮的数量、名称、地址和图标，空数组会隐藏这些链接。每项的 `Id` 必须唯一，`Name` 为按钮名称，`Url` 为绝对 HTTP 或 HTTPS 地址。`Icon` 可使用内建的 `skin`、`wiki`、`link`，也可填写绝对 HTTP 或 HTTPS 图片地址。游戏文件夹和更新公告入口由启动器固定提供，不放入此数组。
 
+`IconPixels` 可为某个快捷链接指定 16 行字符串，每行恰好 16 个 `0` 或 `1`。`1` 使用当前主题的图标颜色绘制，`0` 透明；配置后优先于 `Icon`，显示区域仍为 16×16 逻辑像素。后端会拒绝行数、列数或字符不符合要求的矩阵。
+
 `Announcements` 保存更新公告及历史记录。每项包含唯一的 `Id`、非空的 `Title` 和 `Content`，以及使用 ISO 8601 格式并带时区的 `PublishedAt`。空数组表示暂无公告。接口按发布时间倒序返回完整正文，相同时间按 `Id` 排序。
+
+`LauncherUpdate` 单独管理启动器版本公告，`LatestVersion` 为最新版本的 Unix 秒级时间戳，`Releases` 保存历史记录。每条记录包含 `Version`（同样为秒级时间戳）、`Mandatory`、`Title`、`Content`。默认 `LatestVersion: 0` 和空 `Releases` 表示尚未发布更新公告。最新版必须存在对应记录，版本号不能重复，历史记录保留供跨版本检查使用。例如：
+
+```json
+"LauncherUpdate": {
+  "LatestVersion": 1793923200,
+  "Releases": [
+    { "Version": 1793836800, "Mandatory": true, "Title": "必要更新", "Content": "此处填写更新说明。" },
+    { "Version": 1793923200, "Mandatory": false, "Title": "新版启动器", "Content": "此处填写更新说明和手动获取新版的方法。" }
+  ]
+}
+```
+
+`GET /api/launcher/updates?after=<当前时间戳版本号>` 返回最新版本号，以及 `(当前版本, 最新版本]` 区间内按版本倒序排列的公告；该接口独立于整合包配置。客户端打开时和启动游戏前检查这个区间，只要其中一条记录的 `Mandatory` 为 `true`，就显示不可关闭的更新公告，阻止使用主界面；仍可退出整个启动器。普通更新在同一次运行中针对同一个最新版只提示一次。弹窗没有更新按钮，程序不自动替换自身。已有的 `Announcements` 及底部公告入口保持独立。
 
 运行：`dotnet run --project src/HAPPYLAND.Server --no-launch-profile -- --environment Production --urls http://127.0.0.1:5197`。此命令读取私有的 `appsettings.Production.json`。`GET /api/launcher` 返回整合包、账号、服务器、首页文本和快捷链接配置；`GET /api/pack` 提供支持范围请求的整合包下载；`GET /api/announcements` 返回全部更新公告，该接口在整合包尚未配置或文件不存在时也可使用。对外提供服务时配置 HTTPS，或通过 HTTPS 反向代理转发。GitHub Release 的后端包已附带运行时；自行使用框架依赖模式发布时需要 ASP.NET Core 10 运行时。
 
@@ -65,7 +81,7 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 
 推送 `main`、向 `main` 提交 Pull Request，或在 [Actions](https://github.com/HAPPYLAND-Dev/HAPPYLAND-Launcher/actions/workflows/build-release.yml) 手动运行工作流，会构建 Windows x64、Linux x64、macOS Intel 和 macOS Apple Silicon。每个平台分别打包启动器和后端，压缩包及 SHA-256 校验文件可从该次运行的 Artifacts 下载，保留 7 天。
 
-推送 `v1.2.3` 这样的版本 tag 后，全部平台构建成功才会创建并公开 GitHub Release，附带八个压缩包、`SHA256SUMS.txt` 和自动生成的发布说明。`v1.2.3-rc.1` 这样的 tag 会发布为预发布版本。tag 中的版本号写入程序；普通 CI 构建使用 `0.0.1-ci.<运行序号>`。上传失败时 Release 保持草稿，重新运行工作流可继续上传。
+推送 `v1.2.3` 这样的版本 tag 后，全部平台构建成功才会创建并公开 GitHub Release，附带八个压缩包、`SHA256SUMS.txt` 和自动生成的发布说明。`v1.2.3-rc.1` 这样的 tag 会发布为预发布版本。tag 中的版本号写入程序；普通 CI 构建使用 `Directory.Build.props` 中的显示版本，当前为 `1.0.1`。用于更新比较的 `LauncherVersionCode` 取 Git 提交的 Unix 秒级时间戳，四个平台一致；每份 Actions Artifact 内的 `BUILD-INFO-<平台>.json` 记录显示版本、时间戳和提交 SHA，配置后端版本时使用其中的 `versionCode`。上传失败时 Release 保持草稿，重新运行工作流可继续上传。
 
 ```sh
 git tag v1.2.3
@@ -76,7 +92,7 @@ Windows 使用 ZIP，Linux 和 macOS 使用保留可执行权限的 `tar.gz`。W
 
 后端包包含一个可执行文件、公开的 `appsettings.json` 及说明和许可证。部署时在解压目录复制为 `appsettings.Production.json`，填写整合包、账号及服务器配置，然后从该目录运行 `HAPPYLAND.Server`（Windows 为 `HAPPYLAND.Server.exe`）。环境配置文件不会进入发布包，原有配置文件的位置不变。
 
-本地打包需要 .NET 10 SDK 和 Python 3.11 以上版本，例如 `python scripts/package.py --runtime linux-x64 --version 1.2.3`，输出在 `artifacts/`。macOS `.app` 的打包与签名在 macOS 上执行。
+本地打包需要 .NET 10 SDK 和 Python 3.11 以上版本，例如 `python scripts/package.py --runtime linux-x64 --version 1.2.3`，输出在 `artifacts/`，可用 `--version-code <秒级时间戳>` 显式指定更新比较版本。直接 `dotnet build` 使用当前 UTC 时间的秒级时间戳。macOS `.app` 的打包与签名在 macOS 上执行。
 
 ## 许可证
 

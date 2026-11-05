@@ -12,6 +12,7 @@
     <ProjectReference Include="../HAPPYLAND.Launcher.Core/HAPPYLAND.Launcher.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <AssemblyMetadata Include="LauncherVersionCode" Value="$(LauncherVersionCode)" />
     <AvaloniaResource Include="Assets/**" />
     <None Update="Assets/Fonts/LICENSE-OFL.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Never" />
   </ItemGroup>

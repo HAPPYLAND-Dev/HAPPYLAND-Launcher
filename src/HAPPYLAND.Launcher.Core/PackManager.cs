@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using Happyland.Contracts;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Instances;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Mods.Modpacks;
 
@@ -42,19 +43,9 @@ public sealed class PackManager(string root, HttpClient http)
         try
         {
             var archive = Path.Combine(temporary, "pack.mrpack");
-            using (var response = await http.GetAsync(config.PackUrl, HttpCompletionOption.ResponseHeadersRead, ct))
-            {
-                response.EnsureSuccessStatusCode();
-                await using var input = await response.Content.ReadAsStreamAsync(ct);
-                await using var output = File.Create(archive);
-                await input.CopyToAsync(output, ct);
-            }
-            await using (var input = File.OpenRead(archive))
-            {
-                var digest = Convert.ToHexString(await SHA256.HashDataAsync(input, ct)).ToLowerInvariant();
-                if (input.Length != config.PackSize || !string.Equals(digest, config.PackSha256, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("整合包校验失败，请重试。");
-            }
+            await new AdaptiveDownloader(http).DownloadAsync(
+                new DownloadFile(config.PackUrl, archive, config.PackSize, config.PackSha256, HashAlgorithmName.SHA256),
+                cancellationToken: ct);
             var importer = new ModrinthModpackImporter(Path.Combine(temporary, "instances"), http);
             var instance = await importer.ImportAsync(archive, "HAPPYLAND", progress, ct);
             var stage = instance.GameDirectory!;

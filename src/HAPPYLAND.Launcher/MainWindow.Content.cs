@@ -60,7 +60,10 @@ public sealed partial class MainWindow
         homeNotice.Text = config!.HomeNotice;
         homeNoticeArea.IsVisible = !string.IsNullOrWhiteSpace(config.HomeNotice);
         var links = config.Shortcuts ?? [];
-        if (!displayedShortcuts.SequenceEqual(links)) RebuildShortcuts(links);
+        if (displayedShortcuts.Count != links.Count || !displayedShortcuts.Zip(links).All(pair =>
+                pair.First.Id == pair.Second.Id && pair.First.Name == pair.Second.Name &&
+                pair.First.Url == pair.Second.Url && pair.First.Icon == pair.Second.Icon &&
+                (pair.First.IconPixels ?? []).SequenceEqual(pair.Second.IconPixels ?? []))) RebuildShortcuts(links);
     }
 
     private void RebuildShortcuts(IReadOnlyList<LauncherShortcut> links)
@@ -76,7 +79,10 @@ public sealed partial class MainWindow
         foreach (var link in links)
         {
             var kind = link.Icon switch { "skin" => PixelIconKind.Skin, "wiki" => PixelIconKind.Book, _ => PixelIconKind.Link };
-            var content = new Grid { Width = 16, Height = 16, Children = { new PixelIcon { Kind = kind } } };
+            if (link.IconPixels is { } pixels && !LauncherShortcut.IsValidIconPixels(pixels))
+                throw new InvalidDataException($"快捷链接图标必须为 16×16 的 0/1 矩阵：{link.Name}");
+            var content = new Grid { Width = 16, Height = 16,
+                Children = { new PixelIcon { Kind = kind, Pattern = link.IconPixels } } };
             var button = ShortcutButton(link.Name, content, () =>
             {
                 if (!Uri.TryCreate(link.Url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
@@ -85,7 +91,7 @@ public sealed partial class MainWindow
                 return Task.CompletedTask;
             });
             shortcuts.Children.Add(button);
-            if (Uri.TryCreate(link.Icon, UriKind.Absolute, out var iconUri) && iconUri.Scheme is "http" or "https")
+            if (link.IconPixels is null && Uri.TryCreate(link.Icon, UriKind.Absolute, out var iconUri) && iconUri.Scheme is "http" or "https")
                 downloads.Add(LoadShortcutIconAsync(content, iconUri, cancellation.Token));
         }
         shortcuts.Children.Add(ShortcutButton("游戏文件夹", new PixelIcon { Kind = PixelIconKind.Folder }, () =>

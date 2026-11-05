@@ -279,6 +279,7 @@ public sealed partial class MainWindow : Window
     private async Task RefreshAsync()
     {
         config = null;
+        await CheckLauncherUpdatesAsync();
         using var request = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         request.CancelAfter(TimeSpan.FromSeconds(8));
         config = await ReadBackendAsync<LauncherConfig>("api/launcher", request.Token);

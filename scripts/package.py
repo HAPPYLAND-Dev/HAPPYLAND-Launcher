@@ -30,13 +30,13 @@ def build_version(explicit):
             raise ValueError("Release tags must start with v, for example v1.2.3.")
         version = tag[1:]
     else:
-        version = "0.0.1-ci." + os.environ.get("GITHUB_RUN_NUMBER", "0")
+        version = ET.parse(ROOT / "Directory.Build.props").findtext("./PropertyGroup/Version")
     if VERSION.fullmatch(version) is None:
         raise ValueError("Expected a version such as 1.2.3 or 1.2.3-rc.1.")
     return version
 
 
-def publish(project, runtime, version, destination):
+def publish(project, runtime, version, version_code, destination):
     command = [
         "dotnet", "publish", str(ROOT / "src" / project / (project + ".csproj")),
         "--configuration", "Release", "--runtime", runtime, "--self-contained", "true",
@@ -44,6 +44,7 @@ def publish(project, runtime, version, destination):
         "-p:IncludeNativeLibrariesForSelfExtract=true",
         "-p:DebugType=none", "-p:DebugSymbols=false", "-p:ContinuousIntegrationBuild=true",
         "-p:Version=" + version,
+        "-p:LauncherVersionCode=" + str(version_code),
     ]
     if project == "HAPPYLAND.Server":
         command += ["-p:StaticWebAssetsEnabled=false", "-p:PublishIISAssets=false"]
@@ -139,9 +140,17 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--runtime", required=True, choices=["win-x64", "linux-x64", "osx-x64", "osx-arm64"])
     parser.add_argument("--version")
+    parser.add_argument("--version-code", type=int, help="Unix timestamp in seconds; defaults to the commit timestamp")
     parser.add_argument("--output", type=Path, default=ROOT / "artifacts")
     args = parser.parse_args()
     version = build_version(args.version)
+    version_code = args.version_code if args.version_code is not None else int(subprocess.check_output(
+        ["git", "show", "-s", "--format=%ct", "HEAD"], cwd=ROOT, text=True).strip())
+    if version_code <= 0:
+        raise ValueError("The launcher version code must be a positive Unix timestamp in seconds.")
+    build_info = {"version": version, "versionCode": version_code,
+                  "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()}
+    print(json.dumps(build_info), flush=True)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     archives = []
@@ -154,7 +163,7 @@ def main():
         for project, kind in [("HAPPYLAND.Launcher", "Launcher"), ("HAPPYLAND.Server", "Server")]:
             name = f"HAPPYLAND-{kind}-{version}-{args.runtime}"
             published = workspace / name
-            publish(project, args.runtime, version, published)
+            publish(project, args.runtime, version, version_code, published)
             if kind == "Launcher" and args.runtime.startswith("osx-"):
                 published = mac_bundle(published, workspace, args.runtime, version, entitlements)
             else:
@@ -162,6 +171,7 @@ def main():
                 if args.runtime.startswith("osx-"):
                     sign_macos(published / project, entitlements)
             archives.append(archive(published, output, name, windows=args.runtime.startswith("win-")))
+    (output / f"BUILD-INFO-{args.runtime}.json").write_text(json.dumps(build_info, indent=2) + "\n", encoding="utf-8")
     with (output / f"SHA256SUMS-{args.runtime}.txt").open("w", encoding="utf-8", newline="\n") as sums:
         for file in sorted(archives):
             with file.open("rb") as stream:

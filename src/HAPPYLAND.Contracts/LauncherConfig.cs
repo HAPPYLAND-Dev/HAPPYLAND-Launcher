@@ -14,5 +14,13 @@ public sealed record GameServer(string Id, string Name, string Host, int Port = 
 }
 public sealed record ServerRoute(string Id, string Name, string Host, int Port = 25565);
 public sealed record SkinServer(string Id, string Name, string Url);
-public sealed record LauncherShortcut(string Id, string Name, string Url, string Icon = "link");
+public sealed record LauncherShortcut(string Id, string Name, string Url, string Icon = "link",
+    IReadOnlyList<string>? IconPixels = null)
+{
+    public static bool IsValidIconPixels(IReadOnlyList<string> rows) => rows.Count == 16 &&
+        rows.All(row => row is { Length: 16 } && row.All(pixel => pixel is '0' or '1'));
+}
 public sealed record LauncherAnnouncement(string Id, string Title, DateTimeOffset PublishedAt, string Content);
+
+public sealed record LauncherRelease(long Version, bool Mandatory, string Title, string Content);
+public sealed record LauncherUpdateFeed(long LatestVersion, IReadOnlyList<LauncherRelease> Releases);

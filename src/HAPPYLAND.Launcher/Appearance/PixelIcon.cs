@@ -14,6 +14,9 @@ public sealed class PixelIcon : Control
     public static readonly StyledProperty<IBrush?> ForegroundProperty =
         TextBlock.ForegroundProperty.AddOwner<PixelIcon>();
 
+    public static readonly StyledProperty<IReadOnlyList<string>?> PatternProperty =
+        AvaloniaProperty.Register<PixelIcon, IReadOnlyList<string>?>(nameof(Pattern));
+
     private static readonly string[][] Patterns =
     [
         ["1000", "1100", "1110", "1111", "1110", "1100", "1000"],
@@ -36,7 +39,7 @@ public sealed class PixelIcon : Control
         ["0011100", "0100010", "1001001", "1001001", "1000001", "0101010", "0011100"]
     ];
 
-    static PixelIcon() => AffectsRender<PixelIcon>(KindProperty, ForegroundProperty);
+    static PixelIcon() => AffectsRender<PixelIcon>(KindProperty, ForegroundProperty, PatternProperty);
 
     public PixelIcon()
     {
@@ -46,15 +49,16 @@ public sealed class PixelIcon : Control
 
     public PixelIconKind Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
     public IBrush? Foreground { get => GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
+    public IReadOnlyList<string>? Pattern { get => GetValue(PatternProperty); set => SetValue(PatternProperty, value); }
 
     public override void Render(DrawingContext context)
     {
-        var pattern = Patterns[(int)Kind];
+        var pattern = Pattern ?? Patterns[(int)Kind];
         var brush = Foreground ?? (this.TryFindResource("PixelText", out var resource) ? (IBrush)resource! : Brushes.White);
-        var unit = Math.Min(Bounds.Width, Bounds.Height) / 8;
+        var unit = Math.Min(Bounds.Width, Bounds.Height) / (Pattern is null ? 8 : 16);
         var left = (Bounds.Width - pattern[0].Length * unit) / 2;
-        var top = (Bounds.Height - pattern.Length * unit) / 2;
-        for (var y = 0; y < pattern.Length; y++)
+        var top = (Bounds.Height - pattern.Count * unit) / 2;
+        for (var y = 0; y < pattern.Count; y++)
             for (var x = 0; x < pattern[y].Length; x++)
                 if (pattern[y][x] == '1') context.FillRectangle(brush, new Rect(left + x * unit, top + y * unit, unit, unit));
     }

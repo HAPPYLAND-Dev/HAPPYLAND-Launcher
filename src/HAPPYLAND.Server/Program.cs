@@ -13,7 +13,8 @@ app.MapGet("/api/launcher", async (HttpContext context, IOptionsMonitor<Publicat
         return Results.Problem("整合包版本、文件路径和服务器列表必须在后端配置中设置。", statusCode: 503);
     if (publication.Shortcuts is null || publication.Shortcuts.Any(shortcut => shortcut is null ||
             string.IsNullOrWhiteSpace(shortcut.Id) || string.IsNullOrWhiteSpace(shortcut.Name) || !IsHttpUrl(shortcut.Url) ||
-            shortcut.Icon is not ("skin" or "wiki" or "link") && !IsHttpUrl(shortcut.Icon)) ||
+            (shortcut.IconPixels is { } pixels ? !LauncherShortcut.IsValidIconPixels(pixels)
+                : shortcut.Icon is not ("skin" or "wiki" or "link") && !IsHttpUrl(shortcut.Icon))) ||
         publication.Shortcuts.Select(shortcut => shortcut.Id).Distinct(StringComparer.Ordinal).Count() != publication.Shortcuts.Count)
         return Results.Problem("后端快捷链接配置无效，请检查标识、名称、链接和图标。", statusCode: 503);
     if (publication.Servers.Any(server => string.IsNullOrWhiteSpace(server.Id) || string.IsNullOrWhiteSpace(server.Name) || string.IsNullOrWhiteSpace(server.Host) || server.Port is < 1 or > 65535 || !HasValidRoutes(server.Routes)) ||
@@ -31,6 +32,21 @@ app.MapGet("/api/launcher", async (HttpContext context, IOptionsMonitor<Publicat
     return Results.Ok(new LauncherConfig(publication.Version, packUrl, stream.Length, hash,
         publication.MicrosoftClientId, publication.Servers, publication.SkinServers,
         publication.HomeNotice, publication.Shortcuts));
+});
+app.MapGet("/api/launcher/updates", (long after, IOptionsMonitor<Publication> options) =>
+{
+    if (after < 0) return Results.BadRequest("当前版本号不能为负数。");
+    var updates = options.CurrentValue.LauncherUpdate;
+    if (updates is null || updates.LatestVersion < 0 || updates.Releases is null ||
+        updates.Releases.Any(release => release is null || release.Version <= 0 ||
+            release.Version > updates.LatestVersion || release.Version > DateTimeOffset.MaxValue.ToUnixTimeSeconds() ||
+            string.IsNullOrWhiteSpace(release.Title) || string.IsNullOrWhiteSpace(release.Content)) ||
+        updates.Releases.Select(release => release.Version).Distinct().Count() != updates.Releases.Count ||
+        (updates.LatestVersion > 0 && !updates.Releases.Any(release => release.Version == updates.LatestVersion)))
+        return Results.Problem("后端启动器更新配置无效，请检查最新时间戳、版本记录及公告正文。", statusCode: 503);
+    return Results.Ok(new LauncherUpdateFeed(updates.LatestVersion,
+        updates.Releases.Where(release => release.Version > after && release.Version <= updates.LatestVersion)
+            .OrderByDescending(release => release.Version).ToArray()));
 });
 app.MapGet("/api/announcements", (IOptionsMonitor<Publication> options) =>
 {
@@ -72,4 +88,11 @@ public sealed class Publication
     public string HomeNotice { get; set; } = "";
     public List<LauncherShortcut> Shortcuts { get; set; } = [];
     public List<LauncherAnnouncement> Announcements { get; set; } = [];
+    public LauncherUpdatePublication LauncherUpdate { get; set; } = new();
+}
+
+public sealed class LauncherUpdatePublication
+{
+    public long LatestVersion { get; set; }
+    public List<LauncherRelease> Releases { get; set; } = [];
 }
