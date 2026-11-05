@@ -81,7 +81,9 @@ C# 启动器和 ASP.NET Core 后端。启动器使用 Avalonia，Minecraft 核�
 
 推送 `main`、向 `main` 提交 Pull Request，或在 [Actions](https://github.com/HAPPYLAND-Dev/HAPPYLAND-Launcher/actions/workflows/build-release.yml) 手动运行工作流，会构建 Windows x64、Linux x64、macOS Intel 和 macOS Apple Silicon。每个平台分别打包启动器和后端，压缩包及 SHA-256 校验文件可从该次运行的 Artifacts 下载，保留 7 天。
 
-推送 `v1.2.3` 这样的版本 tag 后，全部平台构建成功才会创建并公开 GitHub Release，附带八个压缩包、`SHA256SUMS.txt` 和自动生成的发布说明。`v1.2.3-rc.1` 这样的 tag 会发布为预发布版本。tag 中的版本号写入程序；普通 CI 构建使用 `Directory.Build.props` 中的显示版本，当前为 `1.0.1`。用于更新比较的 `LauncherVersionCode` 取 Git 提交的 Unix 秒级时间戳，四个平台一致；每份 Actions Artifact 内的 `BUILD-INFO-<平台>.json` 记录显示版本、时间戳和提交 SHA，配置后端版本时使用其中的 `versionCode`。上传失败时 Release 保持草稿，重新运行工作流可继续上传。
+推送 `main` 或在 `main` 上手动运行工作流时，四个平台全部构建成功后会自动创建 GitHub Release，标签为 `release-<Version>`，其中 `Version` 是本次构建的秒级时间戳。Release 标题和正文开头都显示该数字，附件包含八个压缩包、`SHA256SUMS.txt` 和 `BUILD-INFO.json`，正文附带自动生成的变更记录。Pull Request 只构建，不发布。上传失败时新 Release 保持草稿，重新运行同一提交的工作流可继续上传。
+
+也可继续推送 `v1.2.3` 这样的版本 tag 发布，此时沿用该 tag；`v1.2.3-rc.1` 会标记为预发布。tag 中的版本号写入程序；普通构建使用 `Directory.Build.props` 中的显示版本，当前为 `1.0.1`。用于更新比较的 `LauncherVersionCode` 取 Git 提交的 Unix 秒级时间戳，四个平台一致。配置后端时，直接复制 Release 中的 **Version**，或读取 `BUILD-INFO.json` 的 `versionCode`，填写到 `Publication.LauncherUpdate.LatestVersion` 和对应版本记录的 `Version`。每个平台的 Actions Artifact 仍包含 `BUILD-INFO-<平台>.json`。
 
 ```sh
 git tag v1.2.3

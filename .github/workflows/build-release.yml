@@ -65,7 +65,9 @@ jobs:
 
   release:
     name: Publish GitHub Release
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))) ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -86,23 +88,60 @@ jobs:
             sha256sum --check "$checksums"
           done
           LC_ALL=C sort SHA256SUMS-*.txt > SHA256SUMS.txt
+      - name: Prepare release version and notes
+        id: metadata
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          root = Path("release")
+          platforms = ("win-x64", "linux-x64", "osx-x64", "osx-arm64")
+          builds = [json.loads((root / f"BUILD-INFO-{platform}.json").read_text()) for platform in platforms]
+          info = builds[0]
+          if any(build != info for build in builds) or info["commit"] != os.environ["GITHUB_SHA"]:
+              raise ValueError("Platform build versions or commit SHAs do not match this workflow run.")
+          version = info["version"]
+          code = info["versionCode"]
+          commit = info["commit"]
+          tag = os.environ["GITHUB_REF_NAME"] if os.environ["GITHUB_REF_TYPE"] == "tag" else f"release-{code}"
+          repo_url = f'{os.environ["GITHUB_SERVER_URL"]}/{os.environ["GITHUB_REPOSITORY"]}'
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"tag={tag}\ntitle=v{version} (Version {code})\n")
+              output.write(f"prerelease={str('-' in version).lower()}\n")
+          (root / "BUILD-INFO.json").write_text(json.dumps(info, indent=2) + "\n", encoding="utf-8")
+          Path("release-notes.md").write_text(
+              f"**Version：`{code}`**\n\n"
+              f"启动器版本：`{version}`\n\n"
+              "后端 `Publication.LauncherUpdate.LatestVersion` 和对应记录的 `Releases[].Version` 使用上面的 Version 数字。\n\n"
+              f"提交：[`{commit[:7]}`]({repo_url}/commit/{commit})\n\n"
+              "附件包含四个平台的启动器、后端、SHA-256 校验文件及 `BUILD-INFO.json`。\n\n",
+              encoding="utf-8")
+          PY
       - name: Publish release after all uploads succeed
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG_NAME: ${{ github.ref_name }}
+          TAG_NAME: ${{ steps.metadata.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.metadata.outputs.title }}
+          PRERELEASE: ${{ steps.metadata.outputs.prerelease }}
         run: |
-          prerelease=false
-          prerelease_args=()
-          if [[ "$TAG_NAME" == *-* ]]; then
-            prerelease=true
-            prerelease_args+=(--prerelease)
+          create_args=()
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            create_args+=(--verify-tag)
+          fi
+          if [[ "$PRERELEASE" == true ]]; then
+            create_args+=(--prerelease)
           fi
           if ! gh release view "$TAG_NAME" >/dev/null 2>&1; then
-            gh release create "$TAG_NAME" --verify-tag --draft --generate-notes \
-              --title "$TAG_NAME" "${prerelease_args[@]}"
+            gh api "repos/$GH_REPO/releases/generate-notes" \
+              -f tag_name="$TAG_NAME" -f target_commitish="$GITHUB_SHA" --jq '.body' >> release-notes.md
+            gh release create "$TAG_NAME" --target "$GITHUB_SHA" --draft --notes-file release-notes.md \
+              --title "$RELEASE_TITLE" "${create_args[@]}"
           fi
           gh release upload "$TAG_NAME" release/*.zip release/*.tar.gz \
-            release/SHA256SUMS.txt --clobber
-          gh release edit "$TAG_NAME" --draft=false --prerelease="$prerelease"
+            release/SHA256SUMS.txt release/BUILD-INFO.json --clobber
+          gh release edit "$TAG_NAME" --draft=false --prerelease="$PRERELEASE" --title "$RELEASE_TITLE"
