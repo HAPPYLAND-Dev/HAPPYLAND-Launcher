@@ -2,10 +2,13 @@ using System.Security.Cryptography;
 using System.IO.Compression;
 using System.Text.RegularExpressions;
 using System.Text.Json;
+using System.Text;
 using Happyland.Contracts;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Instances;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Launcher;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Mods.Modpacks;
+using CmlLib.Core.Installers;
 
 namespace Happyland.Launcher.Core;
 
@@ -34,20 +37,25 @@ public sealed class PackManager(string root, HttpClient http)
     public static bool IsCurrent(InstalledPack? installed, LauncherConfig config) =>
         installed is not null && installed.Version == config.PackVersion && installed.Sha256 == config.PackSha256;
 
-    public async Task<InstalledPack> InstallAsync(LauncherConfig config, IProgress<double>? progress = null, CancellationToken ct = default)
+    public async Task<InstalledPack> InstallAsync(LauncherConfig config, IProgress<LaunchProgress>? progress = null, CancellationToken ct = default)
     {
         Directory.CreateDirectory(root);
         var transactionId = Guid.NewGuid().ToString("N");
         var temporary = Path.Combine(root, ".install-" + transactionId);
         Directory.CreateDirectory(temporary);
+        var cacheKey = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(config.PackSha256.ToUpperInvariant())));
+        var cache = new DownloadCache(Path.Combine(root, ".download-cache", cacheKey));
         try
         {
             var archive = Path.Combine(temporary, "pack.mrpack");
-            await new AdaptiveDownloader(http).DownloadAsync(
-                new DownloadFile(config.PackUrl, archive, config.PackSize, config.PackSha256, HashAlgorithmName.SHA256),
-                cancellationToken: ct);
-            var importer = new ModrinthModpackImporter(Path.Combine(temporary, "instances"), http);
-            var instance = await importer.ImportAsync(archive, "HAPPYLAND", progress, ct);
+            await cache.DownloadAsync(new AdaptiveDownloader(http),
+                [new DownloadFile(config.PackUrl, archive, config.PackSize, config.PackSha256, HashAlgorithmName.SHA256)],
+                new SyncProgress<DownloadProgress>(value => progress?.Report(LaunchProgress.Downloading("Downloading pack", value))),
+                null, ct);
+            var importer = new ModrinthModpackImporter(Path.Combine(temporary, "instances"), http, cache,
+                new SyncProgress<DownloadProgress>(value => progress?.Report(LaunchProgress.Downloading("Downloading mods", value))));
+            var instance = await importer.ImportAsync(archive, "HAPPYLAND", null, ct);
+            progress?.Report(new LaunchProgress { Stage = "Installing pack" });
             var stage = instance.GameDirectory!;
             var newFiles = Directory.EnumerateFiles(stage, "*", SearchOption.AllDirectories)
                 .Select(path => Path.GetRelativePath(stage, path)).Where(path => !IsSave(path) || !SaveExists(path)).ToArray();
@@ -94,6 +102,9 @@ public sealed class PackManager(string root, HttpClient http)
                 await File.WriteAllTextAsync(stateTemp, JsonSerializer.Serialize(installed, JsonOptions), ct);
                 File.Move(stateTemp, statePath, true);
                 File.Delete(journalPath);
+                try { cache.Clear(); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
                 return installed;
             }
             catch

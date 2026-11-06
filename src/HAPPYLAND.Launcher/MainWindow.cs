@@ -23,6 +23,7 @@ using Happyland.Launcher.Core;
 using TechTeaStudio.HyperionMinecraftLauncher.App.Auth;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Auth;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Auth.Accounts;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Launcher;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Logging;
 
@@ -430,17 +431,11 @@ public sealed partial class MainWindow : Window
         if (!game.HasGameFiles || !PackManager.IsCurrent(installed, config!) || !await game.IsPreparedAsync(installed))
         {
             toast.BeginProgress("正在准备游戏");
+            var gameProgress = new Progress<LaunchProgress>(ShowInstallProgress);
             if (!PackManager.IsCurrent(installed, config!))
             {
-                var highestProgress = 0d;
-                var progress = new Progress<double>(p => { highestProgress = Math.Max(highestProgress, p); toast.ShowProgress($"正在准备游戏 {highestProgress:P0}", highestProgress); });
-                installed = await packs.InstallAsync(config!, progress, lifetime.Token);
+                installed = await packs.InstallAsync(config!, gameProgress, lifetime.Token);
             }
-            var gameProgress = new Progress<LaunchProgress>(p =>
-            {
-                var stage = p.Stage == "下载 Minecraft" || p.Stage.StartsWith("Downloading", StringComparison.Ordinal) ? "正在下载游戏" : "正在准备游戏";
-                toast.ShowProgress(p.Fraction is double value ? $"{stage}：{value:P0}" : stage, p.Fraction);
-            });
             await game.PrepareAsync(installed!, null, gameProgress, lifetime.Token);
             await GameServerList.SynchronizeAsync(installed!.Instance.GameDirectory!, config!.Servers, lifetime.Token);
             await SetActionAsync(); RefreshMods(); SetStatus("游戏已准备好"); return;
@@ -478,12 +473,39 @@ public sealed partial class MainWindow : Window
             if (credential != saved) await skinCredentials.WriteAsync(selected.SkinServer!.Url, login, credential, lifetime.Token);
             ReplaceAccount(new LauncherAccount(session.Username, null, selected.SkinServer, session, login, session.Uuid, credential.ClientToken));
             SaveSkinAccounts();
-            var injector = await SkinAuthentication.EnsureInjectorAsync(http, Path.Combine(root, "authlib"), lifetime.Token);
+            var injectorProgress = new Progress<DownloadProgress>(value => ShowDownloadProgress("正在下载登录组件", value));
+            var injector = await SkinAuthentication.EnsureInjectorAsync(http, Path.Combine(root, "authlib"), lifetime.Token, injectorProgress);
             jvm = ["-javaagent:" + injector + "=" + selected.SkinServer!.Url];
         }
         await SavePreferencesAsync(); toast.ShowProgress("正在启动游戏");
-        var launched = await game.LaunchAsync(installed!, session, route.Route.Host, route.Route.Port, null, jvm, null, lifetime.Token, ReadGamePreferences());
+        var launchProgress = new Progress<LaunchProgress>(item =>
+        {
+            if (item.Download is { } download) ShowDownloadProgress("正在下载运行库", download);
+            else toast.ShowProgress("正在启动游戏", item.Fraction);
+        });
+        var launched = await game.LaunchAsync(installed!, session, route.Route.Host, route.Route.Port, null, jvm, launchProgress, lifetime.Token, ReadGamePreferences());
         await WatchGameAsync(launched);
+    }
+
+    private void ShowInstallProgress(LaunchProgress item)
+    {
+        var stage = item.Stage switch
+        {
+            "Downloading pack" => "正在下载整合包",
+            "Downloading mods" => "正在下载模组",
+            "Downloading Java" => "正在下载运行库",
+            "下载 Minecraft" or "Downloading bytes" => "正在下载游戏",
+            _ => "正在准备游戏"
+        };
+        if (item.Download is { } download) ShowDownloadProgress(stage, download);
+        else toast.ShowProgress(item.Fraction is double value ? $"{stage}：{value:P0}" : stage, item.Fraction);
+    }
+
+    private void ShowDownloadProgress(string stage, DownloadProgress value)
+    {
+        var text = value.TotalBytes is > 0
+            ? $"{stage}：{Math.Clamp((double)value.DownloadedBytes / value.TotalBytes.Value, 0, 1):P0}" : stage;
+        toast.ShowDownloadProgress(text, stage, value);
     }
 
     private void LoadPreferences()

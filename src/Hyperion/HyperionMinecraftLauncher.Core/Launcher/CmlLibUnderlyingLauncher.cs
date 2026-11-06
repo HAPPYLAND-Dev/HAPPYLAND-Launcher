@@ -10,6 +10,7 @@ using CmlLib.Core.Auth;
 using CmlLib.Core.Installers;
 using CmlLib.Core.ProcessBuilder;
 using CmlLib.Core.VersionMetadata;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Util;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Versions;
 
@@ -82,6 +83,7 @@ public sealed class CmlLibUnderlyingLauncher : IUnderlyingLauncher
 
         IProgress<InstallerProgressChangedEventArgs>? fileProgress = null;
         IProgress<ByteProgress>? byteProgress = null;
+        var adaptive = _launcher.GameInstaller as AdaptiveGameInstaller;
 
         if (progress is not null)
         {
@@ -100,21 +102,42 @@ public sealed class CmlLibUnderlyingLauncher : IUnderlyingLauncher
                 }
             });
 
-            byteProgress = new SyncProgress<ByteProgress>(args =>
+            if (adaptive is not null)
             {
-                lock (progressGate)
+                adaptive.DetailedProgress = new SyncProgress<DownloadProgress>(args =>
                 {
-                    byteProgressStarted = true;
-                    progress.Report(new LaunchProgress
+                    lock (progressGate)
                     {
-                        Stage = "Downloading bytes",
-                        Fraction = args.TotalBytes > 0 ? (double)args.ProgressedBytes / args.TotalBytes : null,
-                    });
-                }
-            });
+                        byteProgressStarted = true;
+                        progress.Report(LaunchProgress.Downloading("Downloading bytes", args));
+                    }
+                });
+            }
+            else
+            {
+                byteProgress = new SyncProgress<ByteProgress>(args =>
+                {
+                    lock (progressGate)
+                    {
+                        byteProgressStarted = true;
+                        progress.Report(new LaunchProgress
+                        {
+                            Stage = "Downloading bytes",
+                            Fraction = args.TotalBytes > 0 ? (double)args.ProgressedBytes / args.TotalBytes : null,
+                        });
+                    }
+                });
+            }
         }
 
-        await _launcher.InstallAsync(versionName, fileProgress, byteProgress, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _launcher.InstallAsync(versionName, fileProgress, byteProgress, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            if (adaptive is not null) adaptive.DetailedProgress = null;
+        }
     }
 
     /// <inheritdoc />

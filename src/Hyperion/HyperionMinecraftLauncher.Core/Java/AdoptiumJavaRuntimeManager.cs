@@ -8,7 +8,6 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using CmlLib.Core;
 using CmlLib.Core.Installers;
 using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 
@@ -31,6 +30,7 @@ public sealed class AdoptiumJavaRuntimeManager : IJavaRuntimeManager
     private readonly string _os;
     private readonly string _arch;
     private readonly ISystemJavaProbe? _systemProbe;
+    private readonly IProgress<DownloadProgress>? _downloadProgress;
 
     /// <summary>Default constructor: uses the OS-default cache root and a fresh HttpClient.</summary>
     public AdoptiumJavaRuntimeManager()
@@ -55,7 +55,8 @@ public sealed class AdoptiumJavaRuntimeManager : IJavaRuntimeManager
     /// and the Adoptium download, so a host with an existing matching JDK / JRE under JAVA_HOME,
     /// PATH, or a well-known install dir is preferred over a fresh download.
     /// </summary>
-    public AdoptiumJavaRuntimeManager(HttpClient http, string rootDirectory, string os, string arch, ISystemJavaProbe? systemProbe)
+    public AdoptiumJavaRuntimeManager(HttpClient http, string rootDirectory, string os, string arch, ISystemJavaProbe? systemProbe,
+        IProgress<DownloadProgress>? downloadProgress = null)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
         _rootDirectory = !string.IsNullOrWhiteSpace(rootDirectory)
@@ -64,6 +65,7 @@ public sealed class AdoptiumJavaRuntimeManager : IJavaRuntimeManager
         _os = !string.IsNullOrWhiteSpace(os) ? os : throw new ArgumentException("os is required", nameof(os));
         _arch = !string.IsNullOrWhiteSpace(arch) ? arch : throw new ArgumentException("arch is required", nameof(arch));
         _systemProbe = systemProbe;
+        _downloadProgress = downloadProgress;
     }
 
     /// <summary>Resolve the platform default cache root: <c>%LOCALAPPDATA%/HyperionMinecraftLauncher/java</c>.</summary>
@@ -144,6 +146,7 @@ public sealed class AdoptiumJavaRuntimeManager : IJavaRuntimeManager
         try
         {
             await DownloadAsync(url, tempArchive, progress, cancellationToken).ConfigureAwait(false);
+            progress?.Report(0.95);
             await ExtractAsync(tempArchive, targetDir, cancellationToken).ConfigureAwait(false);
         }
         finally
@@ -211,9 +214,11 @@ public sealed class AdoptiumJavaRuntimeManager : IJavaRuntimeManager
         IProgress<double>? progress,
         CancellationToken cancellationToken)
     {
-        var downloadProgress = progress is null ? null : new SyncProgress<ByteProgress>(value =>
+        var downloadProgress = new SyncProgress<DownloadProgress>(value =>
         {
-            if (value.TotalBytes > 0) progress.Report(Math.Min(0.95, value.ToRatio() * 0.95));
+            _downloadProgress?.Report(value);
+            if (_downloadProgress is null && progress is not null && value.TotalBytes is > 0)
+                progress.Report(Math.Min(0.95, (double)value.DownloadedBytes / value.TotalBytes.Value * 0.95));
         });
         await new AdaptiveDownloader(_http).DownloadAsync(new DownloadFile(url, destination),
             downloadProgress, cancellationToken).ConfigureAwait(false);

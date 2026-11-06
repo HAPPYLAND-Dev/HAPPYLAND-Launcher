@@ -36,16 +36,21 @@ public sealed class ModrinthModpackImporter : IModpackImporter
 
     private readonly string _instancesRoot;
     private readonly HttpClient _http;
+    private readonly DownloadCache? _cache;
+    private readonly IProgress<DownloadProgress>? _downloadProgress;
 
     /// <summary>
     /// Construct against a per-instance root directory + an HTTP client. The constructor
     /// only validates its arguments; the directory is created lazily on first import.
     /// </summary>
-    public ModrinthModpackImporter(string instancesRoot, HttpClient http)
+    public ModrinthModpackImporter(string instancesRoot, HttpClient http,
+        DownloadCache? cache = null, IProgress<DownloadProgress>? downloadProgress = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(instancesRoot);
         _instancesRoot = instancesRoot;
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _cache = cache;
+        _downloadProgress = downloadProgress;
     }
 
     /// <inheritdoc />
@@ -81,11 +86,16 @@ public sealed class ModrinthModpackImporter : IModpackImporter
             var downloads = required.Select(file => new DownloadFile(file.DownloadUrl,
                 ResolveInside(instanceDir, file.TargetPath), file.FileSizeBytes, file.Sha1,
                 Mirrors: file.MirrorUrls)).ToArray();
-            await new AdaptiveDownloader(_http).DownloadAsync(downloads, fileCompleted: (_, _) =>
+            Task Completed(DownloadFile _, CancellationToken __)
             {
                 progress?.Report((double)Interlocked.Increment(ref completed) / total);
                 return Task.CompletedTask;
-            }, cancellationToken: cancellationToken).ConfigureAwait(false);
+            }
+            var downloader = new AdaptiveDownloader(_http);
+            if (_cache is null)
+                await downloader.DownloadAsync(downloads, _downloadProgress, Completed, cancellationToken).ConfigureAwait(false);
+            else
+                await _cache.DownloadAsync(downloader, downloads, _downloadProgress, Completed, cancellationToken).ConfigureAwait(false);
 
             // 2) Copy overrides/, then client-overrides/ on top of it (the spec's precedence).
             await using (var fs = File.OpenRead(archivePath))

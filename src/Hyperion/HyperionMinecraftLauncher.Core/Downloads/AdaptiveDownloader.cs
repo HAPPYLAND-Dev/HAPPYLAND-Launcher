@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
-using CmlLib.Core;
 using Microsoft.Win32.SafeHandles;
 
 namespace TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
@@ -12,12 +11,13 @@ public sealed class AdaptiveDownloader(HttpClient http)
 {
     public static int WorkerCount => Math.Min(Environment.ProcessorCount, 12) * 2;
     private const int BufferSize = 64 * 1024;
+    private const int MinSegmentSize = 512 * 1024;
 
-    public Task DownloadAsync(DownloadFile file, IProgress<ByteProgress>? progress = null,
+    public Task DownloadAsync(DownloadFile file, IProgress<DownloadProgress>? progress = null,
         CancellationToken cancellationToken = default) =>
         DownloadAsync([file], progress, cancellationToken: cancellationToken);
 
-    public async Task DownloadAsync(IReadOnlyList<DownloadFile> files, IProgress<ByteProgress>? progress = null,
+    public async Task DownloadAsync(IReadOnlyList<DownloadFile> files, IProgress<DownloadProgress>? progress = null,
         Func<DownloadFile, CancellationToken, Task>? fileCompleted = null,
         CancellationToken cancellationToken = default)
     {
@@ -28,18 +28,24 @@ public sealed class AdaptiveDownloader(HttpClient http)
         var running = new Dictionary<Task, (Transfer File, Segment? Segment)>();
         var candidates = transfers;
         var lastReport = Stopwatch.GetTimestamp();
+        long transferredBytes = 0;
 
         bool CanSchedule(Transfer file) => !file.Done && !file.Finishing && file.Error is null &&
             (!file.Started || (file.CanSplit && (file.Pending.Count > 0 ||
-                file.Segments.Any(part => !part.Yielded && part.End - part.Next >= BufferSize * 2))));
+                file.Segments.Any(part => !part.Yielded && part.End - part.Next >= MinSegmentSize * 2))));
+
+        bool CanProbe(Transfer file) => !file.Done && !file.Finishing && file.Error is null && file.InitialReady &&
+            !file.CanSplit && !file.Sequential && !file.RangeFallbackAttempted && file.Length is > 0 &&
+            file.Request.RangeFallbackUrl is not null && !string.IsNullOrWhiteSpace(file.Request.Hash) &&
+            file.Segments.Any(part => !part.Probe && part.End - part.Next >= MinSegmentSize * 2);
 
         void Report(bool force = false)
         {
             // Called under gate: progress observers see ordered snapshots from all workers.
             if (!force && Stopwatch.GetElapsedTime(lastReport).TotalMilliseconds < 100) return;
             lastReport = Stopwatch.GetTimestamp();
-            progress?.Report(new ByteProgress(transfers.Sum(file => file.Length ?? 0),
-                transfers.Sum(file => file.Downloaded)));
+            var total = transfers.All(file => file.Length.HasValue) ? transfers.Sum(file => file.Length!.Value) : (long?)null;
+            progress?.Report(new DownloadProgress(transfers.Sum(file => file.Downloaded), total, transferredBytes));
         }
 
         void Signal()
@@ -61,7 +67,9 @@ public sealed class AdaptiveDownloader(HttpClient http)
 
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(http.Timeout);
-            using var request = new HttpRequestMessage(HttpMethod.Get, file.Url);
+            var useFallback = !segment.Initial && file.UseRangeFallback;
+            using var request = new HttpRequestMessage(HttpMethod.Get, useFallback ? file.Request.RangeFallbackUrl : file.Url);
+            if (useFallback) request.Options.Set(DownloadFile.BypassMirror, true);
             request.Headers.AcceptEncoding.ParseAdd("identity");
             if (!file.Sequential)
             {
@@ -95,6 +103,9 @@ public sealed class AdaptiveDownloader(HttpClient http)
                     file.Length = length ?? file.Length;
                     segment.End = file.Length ?? long.MaxValue;
                     file.CanSplit = partial && !file.Sequential;
+                    file.InitialReady = true;
+                    file.UseRangeFallback = partial && file.Request.RangeFallbackUrl is not null &&
+                        request.Options.TryGetValue(DownloadFile.BypassMirror, out var usedOfficial) && usedOfficial;
                     var etag = response.Headers.ETag;
                     file.Validator = etag is { IsWeak: false } ? new RangeConditionHeaderValue(etag)
                         : response.Content.Headers.LastModified is { } modified ? new RangeConditionHeaderValue(modified) : null;
@@ -113,7 +124,7 @@ public sealed class AdaptiveDownloader(HttpClient http)
                     offset = segment.Next;
                     count = (int)Math.Min(buffer.Length, segment.End - offset);
                     if (count > 0 && file.CanSplit && file.Segments.Count > 1 &&
-                        candidates.Any(other => other != file && CanSchedule(other) &&
+                        candidates.Any(other => other != file && (CanSchedule(other) || CanProbe(other)) &&
                             file.Segments.Count(part => !part.Yielded) > other.Segments.Count(part => !part.Yielded) + 1))
                     {
                         segment.Yielded = true;
@@ -134,6 +145,7 @@ public sealed class AdaptiveDownloader(HttpClient http)
                 {
                     if (file.Length is null) segment.Next = offset + count;
                     file.Downloaded += count;
+                    transferredBytes += count;
                     Report();
                 }
             }
@@ -141,6 +153,35 @@ public sealed class AdaptiveDownloader(HttpClient http)
             {
                 if (file.Length is null) file.Length = file.Downloaded;
             }
+        }
+
+        async Task ProbeRangeFallbackAsync(Transfer file)
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(file.Cancellation.Token);
+            timeout.CancelAfter(TimeSpan.FromSeconds(2));
+            using var request = new HttpRequestMessage(HttpMethod.Get, file.Request.RangeFallbackUrl);
+            request.Options.Set(DownloadFile.BypassMirror, true);
+            request.Headers.Range = new RangeHeaderValue(0, 0);
+            request.Headers.AcceptEncoding.ParseAdd("identity");
+            try
+            {
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token)
+                    .ConfigureAwait(false);
+                var range = response.Content.Headers.ContentRange;
+                if (response.StatusCode == HttpStatusCode.PartialContent && range?.Unit == "bytes" &&
+                    range.From == 0 && range.To == 0 && range.Length == file.Length &&
+                    response.Content.Headers.ContentEncoding.All(encoding => encoding.Equals("identity", StringComparison.OrdinalIgnoreCase)))
+                {
+                    lock (gate)
+                    {
+                        file.UseRangeFallback = true;
+                        file.CanSplit = true;
+                        file.Validator = null;
+                    }
+                }
+            }
+            catch (HttpRequestException) { }
+            catch (OperationCanceledException) when (!file.Cancellation.IsCancellationRequested) { }
         }
 
         async Task FinishAsync(Transfer file)
@@ -163,6 +204,7 @@ public sealed class AdaptiveDownloader(HttpClient http)
 
         try
         {
+            lock (gate) Report(force: true);
             while (transfers.Any(file => !file.Done))
             {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -205,6 +247,8 @@ public sealed class AdaptiveDownloader(HttpClient http)
                         cancellationToken.ThrowIfCancellationRequested();
                         if (failure is RangeUnavailableException && !file.Sequential)
                             file.Sequential = true;
+                        else if (file.UseRangeFallback && failure is (HttpRequestException or InvalidDataException or EndOfStreamException or OperationCanceledException))
+                            file.Sequential = true;
                         else if ((failure is HttpRequestException or InvalidDataException or EndOfStreamException or OperationCanceledException) &&
                                  file.UrlIndex < (file.Request.Mirrors?.Count ?? 0))
                         {
@@ -241,10 +285,15 @@ public sealed class AdaptiveDownloader(HttpClient http)
                         }
                         else
                         {
-                            file = candidates.Where(CanSchedule)
+                            file = candidates.Where(file => CanSchedule(file) || CanProbe(file))
                                 .OrderBy(file => file.Segments.Count).FirstOrDefault();
                             if (file is null) break;
-                            if (file.Pending.Count > 0)
+                            if (!CanSchedule(file))
+                            {
+                                file.RangeFallbackAttempted = true;
+                                segment = new Segment(0, 0, initial: false, probe: true);
+                            }
+                            else if (file.Pending.Count > 0)
                             {
                                 segment = file.Pending.MaxBy(part => part.End - part.Next)!;
                                 file.Pending.Remove(segment);
@@ -258,7 +307,7 @@ public sealed class AdaptiveDownloader(HttpClient http)
                             }
                         }
                         file.Segments.Add(segment);
-                        running.Add(Task.Run(() => ReceiveAsync(file, segment)), (file, segment));
+                        running.Add(Task.Run(() => segment.Probe ? ProbeRangeFallbackAsync(file) : ReceiveAsync(file, segment)), (file, segment));
                     }
                     notification = changed.Task;
                 }
@@ -279,11 +328,12 @@ public sealed class AdaptiveDownloader(HttpClient http)
 
     private sealed class RangeUnavailableException : Exception;
 
-    private sealed class Segment(long start, long? end, bool initial)
+    private sealed class Segment(long start, long? end, bool initial, bool probe = false)
     {
         public long Start { get; } = start;
         public long? RequestEnd { get; } = end;
         public bool Initial { get; } = initial;
+        public bool Probe { get; } = probe;
         public bool Yielded;
         public long Next = start;
         public long End = end ?? long.MaxValue;
@@ -300,6 +350,9 @@ public sealed class AdaptiveDownloader(HttpClient http)
         public bool Finishing;
         public bool Done;
         public bool CanSplit;
+        public bool InitialReady;
+        public bool RangeFallbackAttempted;
+        public bool UseRangeFallback;
         public long? Length = request.Size;
         public long Downloaded;
         public SafeFileHandle? Handle;
@@ -316,7 +369,7 @@ public sealed class AdaptiveDownloader(HttpClient http)
             File.Delete(TemporaryPath);
             Cancellation.Dispose();
             Cancellation = CancellationTokenSource.CreateLinkedTokenSource(token);
-            Started = Finishing = CanSplit = false;
+            Started = Finishing = CanSplit = InitialReady = RangeFallbackAttempted = UseRangeFallback = false;
             Error = null;
             Length = Request.Size;
             Downloaded = 0;
@@ -328,7 +381,7 @@ public sealed class AdaptiveDownloader(HttpClient http)
         {
             Handle?.Dispose();
             Cancellation.Dispose();
-            File.Delete(TemporaryPath);
+            if (File.Exists(TemporaryPath)) File.Delete(TemporaryPath);
         }
     }
 }

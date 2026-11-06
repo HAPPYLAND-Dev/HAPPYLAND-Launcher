@@ -41,7 +41,8 @@ public static class SkinAuthentication
         return new SkinSession(account, result.GetProperty("clientToken").GetString()!);
     }
 
-    public static async Task<string> EnsureInjectorAsync(HttpClient http, string root, CancellationToken ct = default)
+    public static async Task<string> EnsureInjectorAsync(HttpClient http, string root, CancellationToken ct = default,
+        IProgress<DownloadProgress>? progress = null)
     {
         var info = await http.GetFromJsonAsync<JsonElement>("https://authlib-injector.yushi.moe/artifact/latest.json", ct);
         var hash = info.GetProperty("checksums").GetProperty("sha256").GetString()!;
@@ -55,7 +56,7 @@ public static class SkinAuthentication
         }
         await new AdaptiveDownloader(http).DownloadAsync(
             new DownloadFile(info.GetProperty("download_url").GetString()!, path, Hash: hash, HashAlgorithm: HashAlgorithmName.SHA256),
-            cancellationToken: ct);
+            progress, ct);
         return path;
     }
 }

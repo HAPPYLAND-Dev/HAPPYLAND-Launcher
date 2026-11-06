@@ -1,3 +1,5 @@
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
+
 namespace TechTeaStudio.HyperionMinecraftLauncher.Core.Launcher;
 
 /// <summary>
@@ -13,4 +15,13 @@ public sealed record LaunchProgress
 
     /// <summary>Currently-processed file or item name, if applicable.</summary>
     public string? CurrentItem { get; init; }
+
+    public DownloadProgress? Download { get; init; }
+
+    public static LaunchProgress Downloading(string stage, DownloadProgress download) => new()
+    {
+        Stage = stage,
+        Fraction = download.TotalBytes is > 0 ? (double)download.DownloadedBytes / download.TotalBytes.Value : null,
+        Download = download
+    };
 }

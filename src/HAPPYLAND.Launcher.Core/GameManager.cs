@@ -37,7 +37,7 @@ public sealed class GameManager
         javaDirectory = Path.Combine(root, "java");
         http = new HttpClient(new MinecraftMirrorHandler()) { Timeout = TimeSpan.FromMinutes(3) };
         var parameters = MinecraftLauncherParameters.CreateDefault(new MinecraftPath(gameDirectory), http);
-        parameters.GameInstaller = new AdaptiveGameInstaller(http);
+        parameters.GameInstaller = new AdaptiveGameInstaller(http, MinecraftMirrorHandler.GetOfficialLibraryUrl);
         versionLoader = new LaunchVersionLoader(parameters.VersionLoader!, new LocalJsonVersionLoader(parameters.MinecraftPath!));
         parameters.VersionLoader = versionLoader;
         var extractors = parameters.FileExtractors!;
@@ -88,7 +88,7 @@ public sealed class GameManager
         await launcher.GetAllVersionsAsync(ct);
         var instance = pack.Instance;
         if (string.IsNullOrWhiteSpace(javaPath))
-            javaPath = await EnsureManagedJavaAsync(await JavaRequirementAsync(instance.VersionId, ct), null, ct);
+            javaPath = await EnsureManagedJavaAsync(await JavaRequirementAsync(instance.VersionId, ct), progress, ct);
         forge.JavaPath = javaPath;
         neoForge.JavaPath = javaPath;
         progress?.Report(new LaunchProgress { Stage = "下载 Minecraft" });
@@ -135,13 +135,11 @@ public sealed class GameManager
         var requirement = ResolveJavaRequirement(version, pack.Instance.VersionId);
         progress?.Report(new LaunchProgress { Stage = "Preparing Java" });
         await Task.Run(() => RemoveManagedDirectory(Path.Combine(javaDirectory, requirement.ToString().ToLowerInvariant()), ct), ct);
-        var javaProgress = progress is null ? null : new SyncProgress<double>(fraction =>
-            progress.Report(new LaunchProgress { Stage = "Downloading Java", Fraction = fraction }));
-        await EnsureManagedJavaAsync(requirement, javaProgress, ct);
+        await EnsureManagedJavaAsync(requirement, progress, ct);
         if (wasPrepared) await File.WriteAllTextAsync(markerPath, pack.Sha256, ct);
     }
 
-    private async Task<string> EnsureManagedJavaAsync(JavaRequirement requirement, IProgress<double>? progress, CancellationToken ct)
+    private async Task<string> EnsureManagedJavaAsync(JavaRequirement requirement, IProgress<LaunchProgress>? progress, CancellationToken ct)
     {
         var installed = await Task.Run(() => java.ListInstalledAsync(ct), ct);
         var existing = installed.FirstOrDefault(runtime => runtime.Requirement == requirement);
@@ -151,10 +149,15 @@ public sealed class GameManager
         var target = Path.Combine(javaDirectory, runtimeName);
         await Task.Run(() => RemoveManagedDirectory(target, ct), ct);
         var stagingRoot = Path.Combine(javaDirectory, ".install-" + Guid.NewGuid().ToString("N"));
-        var staging = new AdoptiumJavaRuntimeManager(http, stagingRoot, AdoptiumJavaRuntimeManager.DetectOs(), AdoptiumJavaRuntimeManager.DetectArch());
+        var details = progress is null ? null : new SyncProgress<DownloadProgress>(value =>
+            progress.Report(LaunchProgress.Downloading("Downloading Java", value)));
+        var javaProgress = progress is null ? null : new SyncProgress<double>(fraction =>
+            progress.Report(new LaunchProgress { Stage = "Preparing Java", Fraction = fraction }));
+        var staging = new AdoptiumJavaRuntimeManager(http, stagingRoot, AdoptiumJavaRuntimeManager.DetectOs(),
+            AdoptiumJavaRuntimeManager.DetectArch(), systemProbe: null, downloadProgress: details);
         try
         {
-            var executable = await staging.EnsureRuntimeAsync(requirement, progress, ct);
+            var executable = await staging.EnsureRuntimeAsync(requirement, javaProgress, ct);
             ct.ThrowIfCancellationRequested();
             var stagedRuntime = Path.Combine(stagingRoot, runtimeName);
             var relativeExecutable = Path.GetRelativePath(stagedRuntime, executable);
@@ -186,7 +189,7 @@ public sealed class GameManager
         versionLoader.LocalOnly = true;
         await launcher.GetAllVersionsAsync(ct);
         var instance = pack.Instance;
-        javaPath = string.IsNullOrWhiteSpace(javaPath) ? await EnsureManagedJavaAsync(await JavaRequirementAsync(instance.VersionId, ct), null, ct) : javaPath;
+        javaPath = string.IsNullOrWhiteSpace(javaPath) ? await EnsureManagedJavaAsync(await JavaRequirementAsync(instance.VersionId, ct), progress, ct) : javaPath;
         forge.JavaPath = javaPath;
         neoForge.JavaPath = javaPath;
         var version = instance.Loader == TechTeaStudio.HyperionMinecraftLauncher.Core.Installations.ModLoader.None ? instance.VersionId :

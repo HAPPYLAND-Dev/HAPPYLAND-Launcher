@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
 
 namespace Happyland.Launcher.Appearance;
 
@@ -23,14 +24,21 @@ public sealed class ToastHost : Grid
         FontSize = 10, LineHeight = 14, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center
     };
     private readonly ProgressBar progress = new() { Minimum = 0, Maximum = 1, MinWidth = 0, Height = 2, IsVisible = false };
+    private readonly TextBlock downloadDetails = new() { TextWrapping = TextWrapping.Wrap, IsVisible = false, Classes = { "small", "muted" } };
     private readonly Canvas countdown = new() { Height = 1 };
     private readonly Border elapsedFill = new() { Height = 1 };
     private readonly Border accent = new() { Width = 2 };
     private readonly Button close;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private readonly DispatcherTimer speedTimer = new() { Interval = TimeSpan.FromMilliseconds(500) };
     private readonly Stopwatch elapsed = new();
+    private readonly Stopwatch speedElapsed = new();
     private IDisposable accentBinding;
-    private bool errorTone, persistent, pointerOver, progressActive, progressDismissed;
+    private bool errorTone, persistent, pointerOver, progressActive;
+    private string? downloadStage;
+    private long downloadedBytes, transferredBytes, sampledBytes;
+    private long? totalBytes;
+    private double bytesPerSecond;
 
     public ToastHost()
     {
@@ -58,12 +66,13 @@ public sealed class ToastHost : Grid
         elapsedFill.Bind(BackgroundProperty, this.GetResourceObservable("PixelBorder"));
         countdown.Children.Add(elapsedFill);
         close = new Button { Width = 14, Height = 14, MinHeight = 0, Padding = new Thickness(0), VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(6, 0, 0, 0),
             Content = new PixelIcon { Kind = PixelIconKind.Close, Width = 8, Height = 8 }, Classes = { "quiet" } };
         AutomationProperties.SetName(close, "关闭提示");
         close.Click += (_, _) => Hide();
-        var content = new StackPanel { Spacing = 4, Children = { message, progress } };
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,6,14"), Margin = new Thickness(8, 5), Children = { content, close } };
-        Grid.SetColumn(close, 2);
+        var content = new StackPanel { Spacing = 4, Children = { message, downloadDetails, progress } };
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(8, 5), Children = { content, close } };
+        Grid.SetColumn(close, 1);
         var body = new Grid { RowDefinitions = new RowDefinitions("Auto,1"), Children = { row, countdown } };
         Grid.SetRow(countdown, 1);
         var layout = new Grid { ColumnDefinitions = new ColumnDefinitions("2,*"), Children = { accent, body } };
@@ -77,9 +86,17 @@ public sealed class ToastHost : Grid
             elapsedFill.Width = countdown.Bounds.Width * Math.Min(1, fraction);
             if (fraction >= 1) Hide();
         };
+        speedTimer.Tick += (_, _) =>
+        {
+            var seconds = speedElapsed.Elapsed.TotalSeconds;
+            bytesPerSecond = seconds > 0 ? (transferredBytes - sampledBytes) / seconds : 0;
+            sampledBytes = transferredBytes;
+            speedElapsed.Restart();
+            UpdateDownloadDetails();
+        };
         PointerEntered += (_, _) => { pointerOver = true; elapsed.Stop(); timer.Stop(); };
         PointerExited += (_, _) => { pointerOver = false; ResumeCountdown(); };
-        DetachedFromVisualTree += (_, _) => { elapsed.Stop(); timer.Stop(); };
+        DetachedFromVisualTree += (_, _) => { elapsed.Stop(); timer.Stop(); speedTimer.Stop(); };
         AnimationsEnabled = true;
     }
 
@@ -94,6 +111,7 @@ public sealed class ToastHost : Grid
         details.IsVisible = false;
         progressActive = false;
         progress.IsVisible = false;
+        ClearDownloadDetails();
         Present(text, error, persistent, dismissible: !persistent);
     }
 
@@ -102,27 +120,72 @@ public sealed class ToastHost : Grid
         errorDetails = null;
         details.IsVisible = false;
         progressActive = true;
-        progressDismissed = false;
         ShowProgress(text);
     }
 
     public void ShowProgress(string text, double? fraction = null)
     {
         if (!progressActive) return;
+        ClearDownloadDetails();
         progress.IsVisible = true;
         progress.IsIndeterminate = !fraction.HasValue;
         if (fraction is double value) progress.Value = value;
-        if (!progressDismissed) Present(text, false, true, dismissible: true);
+        Present(text, false, true, dismissible: false);
+    }
+
+    public void ShowDownloadProgress(string text, string stage, DownloadProgress value)
+    {
+        if (!progressActive) return;
+        if (!downloadDetails.IsVisible || downloadStage != stage || value.TransferredBytes < transferredBytes)
+        {
+            downloadStage = stage;
+            sampledBytes = value.TransferredBytes;
+            bytesPerSecond = 0;
+            speedElapsed.Restart();
+            speedTimer.Start();
+        }
+        downloadedBytes = value.DownloadedBytes;
+        totalBytes = value.TotalBytes;
+        transferredBytes = value.TransferredBytes;
+        downloadDetails.IsVisible = true;
+        card.MaxWidth = 380;
+        card.Width = 380;
+        progress.IsVisible = true;
+        progress.IsIndeterminate = totalBytes is not > 0;
+        if (totalBytes is > 0) progress.Value = Math.Clamp((double)downloadedBytes / totalBytes.Value, 0, 1);
+        UpdateDownloadDetails();
+        Present(text, false, true, dismissible: false);
     }
 
     public void Hide()
     {
-        if (progressActive) progressDismissed = true;
+        ClearDownloadDetails();
         timer.Stop();
         elapsed.Stop();
         card.Opacity = 0;
         card.IsHitTestVisible = card.IsEnabled = false;
         details.IsVisible = errorDetails is not null;
+    }
+
+    private void UpdateDownloadDetails() => downloadDetails.Text =
+        $"已下载 {FormatBytes(downloadedBytes)} / 总大小 {(totalBytes is long total ? FormatBytes(total) : "--")}    速度 {FormatBytes(bytesPerSecond)}/s";
+
+    private static string FormatBytes(double bytes)
+    {
+        string[] units = ["B", "KiB", "MiB", "GiB", "TiB"];
+        var unit = 0;
+        while (bytes >= 1024 && unit < units.Length - 1) { bytes /= 1024; unit++; }
+        return unit == 0 ? $"{bytes:0} {units[unit]}" : $"{bytes:0.0} {units[unit]}";
+    }
+
+    private void ClearDownloadDetails()
+    {
+        speedTimer.Stop();
+        speedElapsed.Reset();
+        downloadStage = null;
+        downloadDetails.IsVisible = false;
+        card.Width = double.NaN;
+        card.MaxWidth = 240;
     }
 
     private void Present(string text, bool error, bool keepOpen, bool dismissible)

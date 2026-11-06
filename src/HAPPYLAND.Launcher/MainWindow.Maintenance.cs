@@ -39,7 +39,11 @@ public sealed partial class MainWindow
         if (installed is null) throw new UserActionException("请先下载游戏。");
         if (!await ConfirmAsync("重装运行库", "将重新下载并安装游戏所需的 Java。", "重装")) return;
         toast.BeginProgress("正在重装运行库");
-        var progress = new Progress<LaunchProgress>(item => toast.ShowProgress(item.Fraction is double value ? $"正在重装运行库 {value:P0}" : "正在重装运行库", item.Fraction));
+        var progress = new Progress<LaunchProgress>(item =>
+        {
+            if (item.Download is { } download) ShowDownloadProgress("正在下载运行库", download);
+            else toast.ShowProgress(item.Fraction is double value ? $"正在重装运行库 {value:P0}" : "正在重装运行库", item.Fraction);
+        });
         try { await game.ReinstallJavaAsync(installed, progress, lifetime.Token); }
         finally { await SetActionAsync(); }
         SetStatus("运行库已重装");

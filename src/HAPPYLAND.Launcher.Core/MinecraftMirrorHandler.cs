@@ -1,3 +1,5 @@
+using TechTeaStudio.HyperionMinecraftLauncher.Core.Downloads;
+
 namespace Happyland.Launcher.Core;
 
 public sealed class MinecraftMirrorHandler : DelegatingHandler
@@ -7,6 +9,8 @@ public sealed class MinecraftMirrorHandler : DelegatingHandler
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (request.Options.TryGetValue(DownloadFile.BypassMirror, out var bypass) && bypass)
+            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
         var official = request.Method == HttpMethod.Get ? GetOfficial(request.RequestUri!) : null;
         if (official is not null)
         {
@@ -20,6 +24,7 @@ public sealed class MinecraftMirrorHandler : DelegatingHandler
             }
             catch (HttpRequestException) { }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+            request.Options.Set(DownloadFile.BypassMirror, true);
             using var fallback = new HttpRequestMessage(HttpMethod.Get, official);
             foreach (var header in request.Headers) fallback.Headers.TryAddWithoutValidation(header.Key, header.Value);
             return await base.SendAsync(fallback, cancellationToken).ConfigureAwait(false);
@@ -39,6 +44,7 @@ public sealed class MinecraftMirrorHandler : DelegatingHandler
             }
             catch (HttpRequestException) { }
             catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested) { }
+            request.Options.Set(DownloadFile.BypassMirror, true);
         }
         return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
     }
@@ -65,5 +71,13 @@ public sealed class MinecraftMirrorHandler : DelegatingHandler
             _ => null
         };
         return path is null ? null : new Uri("https://bmclapi2.bangbang93.com" + path);
+    }
+
+    public static string? GetOfficialLibraryUrl(string url)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
+        var official = string.Equals(uri.Host, "libraries.minecraft.net", StringComparison.OrdinalIgnoreCase) ? uri : GetOfficial(uri);
+        return official is not null && string.Equals(official.Host, "libraries.minecraft.net", StringComparison.OrdinalIgnoreCase)
+            ? official.AbsoluteUri : null;
     }
 }
